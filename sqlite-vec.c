@@ -122,8 +122,13 @@ enum VectorElementType {
 
 #ifdef SQLITE_VEC_ENABLE_AVX
 #include <immintrin.h>
+#ifdef _MSC_VER
+#define PORTABLE_ALIGN32 __declspec(align(32))
+#define PORTABLE_ALIGN64 __declspec(align(64))
+#else
 #define PORTABLE_ALIGN32 __attribute__((aligned(32)))
 #define PORTABLE_ALIGN64 __attribute__((aligned(64)))
+#endif
 
 static f32 l2_sqr_float_avx(const void *pVect1v, const void *pVect2v,
                             const void *qty_ptr) {
@@ -562,6 +567,117 @@ static f32 distance_hamming(const void *a, const void *b, const void *d) {
   return distance_hamming_u8((u8 *)a, (u8 *)b, dimensions / CHAR_BIT);
 }
 
+// Batch one-to-many L2 distance: compute L2 distance from one query vector
+// to n database vectors stored contiguously in AoS layout.
+// Uses tiled SIMD: broadcasts each query dimension and processes multiple
+// vectors per SIMD instruction, eliminating per-vector horizontal reductions.
+
+#ifdef SQLITE_VEC_ENABLE_AVX
+static void batch_l2_sqr_float_avx(const f32 *base, const f32 *query,
+                                    f32 *distances, size_t n,
+                                    size_t dimensions) {
+  size_t i = 0;
+  size_t D = dimensions;
+
+  // Process 8 vectors at a time. A 256-bit AVX register (__m256) holds
+  // 8 x float32 lanes, so each lane tracks the running squared-distance
+  // sum for one of the 8 vectors in this tile.
+  for (; i + 8 <= n; i += 8) {
+    // acc lanes: [dist_v0, dist_v1, ..., dist_v7] — all start at zero.
+    __m256 acc = _mm256_setzero_ps();
+
+    // Outer loop: iterate over each dimension of the vectors.
+    // This is the "flipped" structure vs. the per-vector approach:
+    // instead of "for each vector, SIMD over dimensions" we do
+    // "for each dimension, SIMD over 8 vectors".
+    for (size_t d = 0; d < D; d++) {
+      // Broadcast query[d] into all 8 lanes: [q_d, q_d, q_d, ..., q_d]
+      __m256 q = _mm256_set1_ps(query[d]);
+
+      // Gather dimension d from 8 consecutive vectors in the chunk.
+      // These are strided loads (stride = D floats between each vector),
+      // assembled into one register: [v_i[d], v_i+1[d], ..., v_i+7[d]]
+      __m256 v = _mm256_set_ps(
+          base[(i + 7) * D + d], base[(i + 6) * D + d],
+          base[(i + 5) * D + d], base[(i + 4) * D + d],
+          base[(i + 3) * D + d], base[(i + 2) * D + d],
+          base[(i + 1) * D + d], base[(i + 0) * D + d]);
+
+      // diff = query[d] - base_vector[d] for each of the 8 vectors
+      __m256 diff = _mm256_sub_ps(q, v);
+      // acc += diff * diff — accumulate squared difference per lane
+      acc = _mm256_add_ps(acc, _mm256_mul_ps(diff, diff));
+    }
+
+    // After all dimensions: each lane holds the full squared-distance sum
+    // for its vector. Take the square root of all 8 lanes at once.
+    // No horizontal reduction needed — each lane is already a complete result.
+    acc = _mm256_sqrt_ps(acc);
+    // Store 8 final distances in one instruction.
+    _mm256_storeu_ps(&distances[i], acc);
+  }
+
+  // Scalar tail: handle remaining vectors that don't fill a full 8-lane tile.
+  for (; i < n; i++) {
+    distances[i] = distance_l2_sqr_float(base + i * D, query, &dimensions);
+  }
+}
+#endif
+
+#ifdef SQLITE_VEC_ENABLE_NEON
+static void batch_l2_sqr_float_neon(const f32 *base, const f32 *query,
+                                     f32 *distances, size_t n,
+                                     size_t dimensions) {
+  size_t i = 0;
+  size_t D = dimensions;
+
+  for (; i + 4 <= n; i += 4) {
+    float32x4_t acc = vdupq_n_f32(0);
+    for (size_t d = 0; d < D; d++) {
+      float32x4_t q = vdupq_n_f32(query[d]);
+      float tmp[4] = {base[(i + 0) * D + d], base[(i + 1) * D + d],
+                      base[(i + 2) * D + d], base[(i + 3) * D + d]};
+      float32x4_t v = vld1q_f32(tmp);
+      float32x4_t diff = vsubq_f32(q, v);
+      acc = vfmaq_f32(acc, diff, diff);
+    }
+    acc = vsqrtq_f32(acc);
+    vst1q_f32(&distances[i], acc);
+  }
+
+  for (; i < n; i++) {
+    distances[i] = distance_l2_sqr_float(base + i * D, query, &dimensions);
+  }
+}
+#endif
+
+static void batch_l2_sqr_float_scalar(const f32 *base, const f32 *query,
+                                       f32 *distances, size_t n,
+                                       size_t dimensions) {
+  for (size_t i = 0; i < n; i++) {
+    distances[i] =
+        distance_l2_sqr_float(base + i * dimensions, query, &dimensions);
+  }
+}
+
+static void batch_distance_l2_sqr_float(const f32 *base, const f32 *query,
+                                         f32 *distances, size_t n,
+                                         size_t dimensions) {
+#ifdef SQLITE_VEC_ENABLE_NEON
+  if (dimensions > 16) {
+    batch_l2_sqr_float_neon(base, query, distances, n, dimensions);
+    return;
+  }
+#endif
+#ifdef SQLITE_VEC_ENABLE_AVX
+  if ((dimensions % 16 == 0)) {
+    batch_l2_sqr_float_avx(base, query, distances, n, dimensions);
+    return;
+  }
+#endif
+  batch_l2_sqr_float_scalar(base, query, distances, n, dimensions);
+}
+
 #ifdef SQLITE_VEC_TEST
 f32 _test_distance_l2_sqr_float(const f32 *a, const f32 *b, size_t dims) {
   return distance_l2_sqr_float(a, b, &dims);
@@ -571,6 +687,11 @@ f32 _test_distance_cosine_float(const f32 *a, const f32 *b, size_t dims) {
 }
 f32 _test_distance_hamming(const u8 *a, const u8 *b, size_t dims) {
   return distance_hamming(a, b, &dims);
+}
+void _test_batch_distance_l2_sqr_float(const f32 *base, const f32 *query,
+                                        f32 *distances, size_t n,
+                                        size_t dims) {
+  batch_distance_l2_sqr_float(base, query, distances, n, dims);
 }
 #endif
 
@@ -6864,68 +6985,82 @@ int vec0Filter_knn_chunks_iter(vec0_vtab *p, sqlite3_stmt *stmtChunks,
     }
 
 
-    for (int i = 0; i < p->chunk_size; i++) {
-      if (!bitmap_get(b, i)) {
-        continue;
-      };
-
-      f32 result;
-      switch (vector_column->element_type) {
-      case SQLITE_VEC_ELEMENT_TYPE_FLOAT32: {
-        const f32 *base_i =
-            ((f32 *)baseVectors) + (i * vector_column->dimensions);
-        switch (vector_column->distance_metric) {
-        case VEC0_DISTANCE_METRIC_L2: {
-          result = distance_l2_sqr_float(base_i, (f32 *)queryVector,
-                                         &vector_column->dimensions);
-          break;
+    // Batch path: compute all distances at once for float32 L2
+    if (vector_column->element_type == SQLITE_VEC_ELEMENT_TYPE_FLOAT32 &&
+        vector_column->distance_metric == VEC0_DISTANCE_METRIC_L2) {
+      batch_distance_l2_sqr_float((f32 *)baseVectors, (f32 *)queryVector,
+                                  chunk_distances, p->chunk_size,
+                                  vector_column->dimensions);
+      for (int i = 0; i < p->chunk_size; i++) {
+        if (!bitmap_get(b, i)) {
+          chunk_distances[i] = FLT_MAX;
         }
-        case VEC0_DISTANCE_METRIC_L1: {
-          result = distance_l1_f32(base_i, (f32 *)queryVector,
-                                   &vector_column->dimensions);
-          break;
-        }
-        case VEC0_DISTANCE_METRIC_COSINE: {
-          result = distance_cosine_float(base_i, (f32 *)queryVector,
-                                         &vector_column->dimensions);
-          break;
-        }
-        }
-        break;
       }
-      case SQLITE_VEC_ELEMENT_TYPE_INT8: {
-        const i8 *base_i =
-            ((i8 *)baseVectors) + (i * vector_column->dimensions);
-        switch (vector_column->distance_metric) {
-        case VEC0_DISTANCE_METRIC_L2: {
-          result = distance_l2_sqr_int8(base_i, (i8 *)queryVector,
-                                        &vector_column->dimensions);
+    } else {
+      // Per-vector fallback for other element types and distance metrics
+      for (int i = 0; i < p->chunk_size; i++) {
+        if (!bitmap_get(b, i)) {
+          continue;
+        };
+
+        f32 result;
+        switch (vector_column->element_type) {
+        case SQLITE_VEC_ELEMENT_TYPE_FLOAT32: {
+          const f32 *base_i =
+              ((f32 *)baseVectors) + (i * vector_column->dimensions);
+          switch (vector_column->distance_metric) {
+          case VEC0_DISTANCE_METRIC_L2: {
+            result = distance_l2_sqr_float(base_i, (f32 *)queryVector,
+                                           &vector_column->dimensions);
+            break;
+          }
+          case VEC0_DISTANCE_METRIC_L1: {
+            result = distance_l1_f32(base_i, (f32 *)queryVector,
+                                     &vector_column->dimensions);
+            break;
+          }
+          case VEC0_DISTANCE_METRIC_COSINE: {
+            result = distance_cosine_float(base_i, (f32 *)queryVector,
+                                           &vector_column->dimensions);
+            break;
+          }
+          }
           break;
         }
-        case VEC0_DISTANCE_METRIC_L1: {
-          result = distance_l1_int8(base_i, (i8 *)queryVector,
+        case SQLITE_VEC_ELEMENT_TYPE_INT8: {
+          const i8 *base_i =
+              ((i8 *)baseVectors) + (i * vector_column->dimensions);
+          switch (vector_column->distance_metric) {
+          case VEC0_DISTANCE_METRIC_L2: {
+            result = distance_l2_sqr_int8(base_i, (i8 *)queryVector,
+                                          &vector_column->dimensions);
+            break;
+          }
+          case VEC0_DISTANCE_METRIC_L1: {
+            result = distance_l1_int8(base_i, (i8 *)queryVector,
+                                      &vector_column->dimensions);
+            break;
+          }
+          case VEC0_DISTANCE_METRIC_COSINE: {
+            result = distance_cosine_int8(base_i, (i8 *)queryVector,
+                                          &vector_column->dimensions);
+            break;
+          }
+          }
+
+          break;
+        }
+        case SQLITE_VEC_ELEMENT_TYPE_BIT: {
+          const u8 *base_i = ((u8 *)baseVectors) +
+                             (i * (vector_column->dimensions / CHAR_BIT));
+          result = distance_hamming(base_i, (u8 *)queryVector,
                                     &vector_column->dimensions);
           break;
         }
-        case VEC0_DISTANCE_METRIC_COSINE: {
-          result = distance_cosine_int8(base_i, (i8 *)queryVector,
-                                        &vector_column->dimensions);
-          break;
-        }
         }
 
-        break;
+        chunk_distances[i] = result;
       }
-      case SQLITE_VEC_ELEMENT_TYPE_BIT: {
-        const u8 *base_i =
-            ((u8 *)baseVectors) + (i * (vector_column->dimensions / CHAR_BIT));
-        result = distance_hamming(base_i, (u8 *)queryVector,
-                                  &vector_column->dimensions);
-        break;
-      }
-      }
-
-      chunk_distances[i] = result;
     }
 
     if(hasDistanceConstraints) {

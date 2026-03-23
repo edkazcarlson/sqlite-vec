@@ -659,6 +659,102 @@ void test_distance_hamming() {
   printf("  All distance_hamming tests passed.\n");
 }
 
+void test_batch_distance_l2_sqr_float() {
+  printf("Starting %s...\n", __func__);
+
+  // Helper: compare batch results against per-vector results
+  // 4 vectors of 3 dimensions
+  {
+    float base[] = {
+        1.0f, 2.0f, 3.0f, // v0
+        4.0f, 5.0f, 6.0f, // v1
+        0.0f, 0.0f, 0.0f, // v2
+        1.0f, 0.0f, 0.0f, // v3
+    };
+    float query[] = {1.0f, 2.0f, 3.0f};
+    float batch_dist[4];
+    _test_batch_distance_l2_sqr_float(base, query, batch_dist, 4, 3);
+
+    // v0 == query => 0
+    assert(batch_dist[0] == 0.0f);
+    // v1: sqrt((4-1)^2+(5-2)^2+(6-3)^2) = sqrt(27)
+    assert(fabsf(batch_dist[1] - sqrtf(27.0f)) < 1e-5f);
+    // v2: sqrt(1+4+9) = sqrt(14)
+    assert(fabsf(batch_dist[2] - sqrtf(14.0f)) < 1e-5f);
+    // v3: sqrt(0+4+9) = sqrt(13)
+    assert(fabsf(batch_dist[3] - sqrtf(13.0f)) < 1e-5f);
+  }
+
+  // Single vector
+  {
+    float base[] = {3.0f, 0.0f};
+    float query[] = {0.0f, 4.0f};
+    float dist[1];
+    _test_batch_distance_l2_sqr_float(base, query, dist, 1, 2);
+    // sqrt(9+16) = 5
+    assert(fabsf(dist[0] - 5.0f) < 1e-5f);
+  }
+
+  // 9 vectors (tests tile boundary: 8 + 1 tail for AVX, 8 + 1 for NEON)
+  {
+    float base[9 * 2];
+    float query[] = {0.0f, 0.0f};
+    float batch_dist[9];
+    for (int i = 0; i < 9; i++) {
+      base[i * 2 + 0] = (float)(i + 1);
+      base[i * 2 + 1] = 0.0f;
+    }
+    _test_batch_distance_l2_sqr_float(base, query, batch_dist, 9, 2);
+    for (int i = 0; i < 9; i++) {
+      float expected = (float)(i + 1);
+      assert(fabsf(batch_dist[i] - expected) < 1e-5f);
+    }
+  }
+
+  // 16 vectors of 16 dimensions (AVX dispatch threshold: dims % 16 == 0)
+  {
+    float base[16 * 16];
+    float query[16];
+    float batch_dist[16];
+    float ref_dist[16];
+    for (int d = 0; d < 16; d++) {
+      query[d] = (float)d;
+    }
+    for (int i = 0; i < 16; i++) {
+      for (int d = 0; d < 16; d++) {
+        base[i * 16 + d] = (float)(i + d);
+      }
+    }
+    _test_batch_distance_l2_sqr_float(base, query, batch_dist, 16, 16);
+    for (int i = 0; i < 16; i++) {
+      ref_dist[i] = _test_distance_l2_sqr_float(base + i * 16, query, 16);
+      assert(fabsf(batch_dist[i] - ref_dist[i]) < 1e-4f);
+    }
+  }
+
+  // 17 vectors of 32 dimensions (tests both tile and tail with larger dims)
+  {
+    float base[17 * 32];
+    float query[32];
+    float batch_dist[17];
+    for (int d = 0; d < 32; d++) {
+      query[d] = (float)d * 0.1f;
+    }
+    for (int i = 0; i < 17; i++) {
+      for (int d = 0; d < 32; d++) {
+        base[i * 32 + d] = (float)(i * 3 + d) * 0.5f;
+      }
+    }
+    _test_batch_distance_l2_sqr_float(base, query, batch_dist, 17, 32);
+    for (int i = 0; i < 17; i++) {
+      float ref = _test_distance_l2_sqr_float(base + i * 32, query, 32);
+      assert(fabsf(batch_dist[i] - ref) < 1e-3f);
+    }
+  }
+
+  printf("  All batch_distance_l2_sqr_float tests passed.\n");
+}
+
 int main() {
   printf("Starting unit tests...\n");
 #ifdef SQLITE_VEC_ENABLE_AVX
@@ -677,5 +773,6 @@ int main() {
   test_distance_l2_sqr_float();
   test_distance_cosine_float();
   test_distance_hamming();
+  test_batch_distance_l2_sqr_float();
   printf("All unit tests passed.\n");
 }

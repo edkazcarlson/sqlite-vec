@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -c \"^//\" /c/Users/Edward/source/repos/sqlite-vec/sqlite-vec.c)",
+      "Bash(grep:*)",
+      "WebSearch",
+      "Bash(powershell -ExecutionPolicy Bypass -File scripts/bench-insert-query-msvc.ps1)"
+    ]
+  }
+}

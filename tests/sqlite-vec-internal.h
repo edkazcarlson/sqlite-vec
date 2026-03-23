@@ -3,6 +3,7 @@
 
 #include <stdlib.h>
 #include <stddef.h>
+#include <stdint.h>
 
 int min_idx(
   const float *distances,
@@ -82,6 +83,9 @@ int vec0_parse_partition_key_definition(const char *source, int source_length,
 float _test_distance_l2_sqr_float(const float *a, const float *b, size_t dims);
 float _test_distance_cosine_float(const float *a, const float *b, size_t dims);
 float _test_distance_hamming(const unsigned char *a, const unsigned char *b, size_t dims);
+void _test_batch_distance_l2_sqr_float(const float *base, const float *query,
+                                        float *distances, size_t n,
+                                        size_t dims);
 #endif
 
 #endif /* SQLITE_VEC_INTERNAL_H */
