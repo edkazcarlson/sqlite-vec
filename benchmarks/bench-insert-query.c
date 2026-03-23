@@ -160,25 +160,32 @@ int main(void) {
 
   /* === CORRECTNESS CHECKS === */
   int errors = 0;
+  double t_start, t_end;
+  double check_rowcount_ms, check_pointlookup_ms, check_knn_self_ms,
+      check_knn_order_ms;
 
   /* Check row count */
   {
+    t_start = get_time_ms();
     rc = sqlite3_prepare_v2(db, "SELECT count(*) FROM bench", -1, &stmt, NULL);
     CHECK_OK(rc, db, "prepare COUNT");
     rc = sqlite3_step(stmt);
     int count = sqlite3_column_int(stmt, 0);
     sqlite3_finalize(stmt);
+    t_end = get_time_ms();
+    check_rowcount_ms = t_end - t_start;
     if (count != BENCH_NUM_VECTORS) {
       fprintf(stderr, "FAIL: row count = %d, expected %d\n", count,
               BENCH_NUM_VECTORS);
       errors++;
     } else {
-      printf("PASS: row count = %d\n", count);
+      printf("PASS: row count = %d (%.2f ms)\n", count, check_rowcount_ms);
     }
   }
 
   /* Check point lookup: re-generate vector for rowid 1 and retrieve it */
   {
+    t_start = get_time_ms();
     xorshift32_state = 12345; /* same seed as insert phase */
     fill_random_vector(vec, BENCH_DIMENSIONS);
     rc = sqlite3_prepare_v2(db, "SELECT embedding FROM bench WHERE rowid = 1",
@@ -215,10 +222,14 @@ int main(void) {
       }
     }
     sqlite3_finalize(stmt);
+    t_end = get_time_ms();
+    check_pointlookup_ms = t_end - t_start;
+    printf("      point lookup time: %.2f ms\n", check_pointlookup_ms);
   }
 
   /* Check KNN: query with a stored vector, expect distance ~0 as top result */
   {
+    t_start = get_time_ms();
     xorshift32_state = 12345;
     fill_random_vector(vec, BENCH_DIMENSIONS); /* vector for rowid 1 */
     rc = sqlite3_prepare_v2(
@@ -247,10 +258,14 @@ int main(void) {
       }
     }
     sqlite3_finalize(stmt);
+    t_end = get_time_ms();
+    check_knn_self_ms = t_end - t_start;
+    printf("      KNN self-lookup time: %.2f ms\n", check_knn_self_ms);
   }
 
   /* Check KNN returns k results and distances are sorted ascending */
   {
+    t_start = get_time_ms();
     xorshift32_state = 99999;
     fill_random_vector(vec, BENCH_DIMENSIONS);
     rc = sqlite3_prepare_v2(
@@ -277,6 +292,8 @@ int main(void) {
     }
     CHECK_DONE(rc, db, "KNN order check step");
     sqlite3_finalize(stmt);
+    t_end = get_time_ms();
+    check_knn_order_ms = t_end - t_start;
 
     if (row_count != BENCH_K) {
       fprintf(stderr, "FAIL: KNN returned %d rows, expected %d\n", row_count,
@@ -297,6 +314,7 @@ int main(void) {
     } else {
       printf("PASS: all KNN distances >= 0\n");
     }
+    printf("      KNN order check time: %.2f ms\n", check_knn_order_ms);
   }
 
   if (errors > 0) {
@@ -345,10 +363,14 @@ int main(void) {
          BENCH_DIMENSIONS);
   printf("Queries:     %d (k=%d)\n", BENCH_NUM_QUERIES, BENCH_K);
   printf("\n");
-  printf("Insert time: %.2f ms (%.2f ms/vector, %.0f vectors/sec)\n",
+  printf("Insert time:          %10.2f ms (%.2f ms/vector, %.0f vectors/sec)\n",
          insert_time_ms, insert_time_ms / BENCH_NUM_VECTORS,
          BENCH_NUM_VECTORS / (insert_time_ms / 1000.0));
-  printf("Query time:  %.2f ms (%.2f ms/query, %.0f queries/sec)\n",
+  printf("Row count check:      %10.2f ms\n", check_rowcount_ms);
+  printf("Point lookup check:   %10.2f ms\n", check_pointlookup_ms);
+  printf("KNN self-lookup check:%10.2f ms\n", check_knn_self_ms);
+  printf("KNN order check:      %10.2f ms\n", check_knn_order_ms);
+  printf("Query time:           %10.2f ms (%.2f ms/query, %.0f queries/sec)\n",
          query_time_ms, query_time_ms / BENCH_NUM_QUERIES,
          BENCH_NUM_QUERIES / (query_time_ms / 1000.0));
   printf("Total results returned: %d (expected %d)\n", total_results,
