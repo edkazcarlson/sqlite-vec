@@ -110,9 +110,7 @@ typedef size_t usize;
 #endif
 
 #define countof(x) (sizeof(x) / sizeof((x)[0]))
-#ifndef min
 #define min(a, b) (((a) <= (b)) ? (a) : (b))
-#endif
 
 enum VectorElementType {
   // clang-format off
@@ -164,6 +162,108 @@ static f32 l2_sqr_float_avx(const void *pVect1v, const void *pVect2v,
   _mm256_store_ps(TmpRes, sum);
   return sqrt(TmpRes[0] + TmpRes[1] + TmpRes[2] + TmpRes[3] + TmpRes[4] +
               TmpRes[5] + TmpRes[6] + TmpRes[7]);
+}
+
+static f32 distance_cosine_float_avx(const void *pVect1v, const void *pVect2v,
+                                     const void *qty_ptr) {
+  f32 *pVect1 = (f32 *)pVect1v;
+  f32 *pVect2 = (f32 *)pVect2v;
+  size_t qty = *((size_t *)qty_ptr);
+  f32 PORTABLE_ALIGN32 TmpDot[8];
+  f32 PORTABLE_ALIGN32 TmpAMag[8];
+  f32 PORTABLE_ALIGN32 TmpBMag[8];
+  size_t qty16 = qty >> 4;
+
+  const f32 *pEnd1 = pVect1 + (qty16 << 4);
+
+  __m256 v1, v2;
+  __m256 sumDot = _mm256_setzero_ps();
+  __m256 sumAMag = _mm256_setzero_ps();
+  __m256 sumBMag = _mm256_setzero_ps();
+
+  while (pVect1 < pEnd1) {
+    v1 = _mm256_loadu_ps(pVect1);
+    pVect1 += 8;
+    v2 = _mm256_loadu_ps(pVect2);
+    pVect2 += 8;
+    sumDot = _mm256_add_ps(sumDot, _mm256_mul_ps(v1, v2));
+    sumAMag = _mm256_add_ps(sumAMag, _mm256_mul_ps(v1, v1));
+    sumBMag = _mm256_add_ps(sumBMag, _mm256_mul_ps(v2, v2));
+
+    v1 = _mm256_loadu_ps(pVect1);
+    pVect1 += 8;
+    v2 = _mm256_loadu_ps(pVect2);
+    pVect2 += 8;
+    sumDot = _mm256_add_ps(sumDot, _mm256_mul_ps(v1, v2));
+    sumAMag = _mm256_add_ps(sumAMag, _mm256_mul_ps(v1, v1));
+    sumBMag = _mm256_add_ps(sumBMag, _mm256_mul_ps(v2, v2));
+  }
+
+  _mm256_store_ps(TmpDot, sumDot);
+  _mm256_store_ps(TmpAMag, sumAMag);
+  _mm256_store_ps(TmpBMag, sumBMag);
+
+  f32 dot = TmpDot[0] + TmpDot[1] + TmpDot[2] + TmpDot[3] +
+            TmpDot[4] + TmpDot[5] + TmpDot[6] + TmpDot[7];
+  f32 aMag = TmpAMag[0] + TmpAMag[1] + TmpAMag[2] + TmpAMag[3] +
+             TmpAMag[4] + TmpAMag[5] + TmpAMag[6] + TmpAMag[7];
+  f32 bMag = TmpBMag[0] + TmpBMag[1] + TmpBMag[2] + TmpBMag[3] +
+             TmpBMag[4] + TmpBMag[5] + TmpBMag[6] + TmpBMag[7];
+
+  // scalar tail for remaining elements
+  const f32 *pEnd2 = ((f32 *)pVect1v) + qty;
+  while (pVect1 < pEnd2) {
+    dot += (*pVect1) * (*pVect2);
+    aMag += (*pVect1) * (*pVect1);
+    bMag += (*pVect2) * (*pVect2);
+    pVect1++;
+    pVect2++;
+  }
+
+  return 1.0f - (dot / (sqrt(aMag) * sqrt(bMag)));
+}
+
+static f32 distance_cosine_float_avx_precomputed_mags(
+    const void *pVect1v, const void *pVect2v, const void *qty_ptr,
+    f32 storedMag, f32 queryMag) {
+  f32 *pVect1 = (f32 *)pVect1v;
+  f32 *pVect2 = (f32 *)pVect2v;
+  size_t qty = *((size_t *)qty_ptr);
+  f32 PORTABLE_ALIGN32 TmpDot[8];
+  size_t qty16 = qty >> 4;
+
+  const f32 *pEnd1 = pVect1 + (qty16 << 4);
+
+  __m256 v1, v2;
+  __m256 sumDot = _mm256_setzero_ps();
+
+  while (pVect1 < pEnd1) {
+    v1 = _mm256_loadu_ps(pVect1);
+    pVect1 += 8;
+    v2 = _mm256_loadu_ps(pVect2);
+    pVect2 += 8;
+    sumDot = _mm256_add_ps(sumDot, _mm256_mul_ps(v1, v2));
+
+    v1 = _mm256_loadu_ps(pVect1);
+    pVect1 += 8;
+    v2 = _mm256_loadu_ps(pVect2);
+    pVect2 += 8;
+    sumDot = _mm256_add_ps(sumDot, _mm256_mul_ps(v1, v2));
+  }
+
+  _mm256_store_ps(TmpDot, sumDot);
+  f32 dot = TmpDot[0] + TmpDot[1] + TmpDot[2] + TmpDot[3] +
+            TmpDot[4] + TmpDot[5] + TmpDot[6] + TmpDot[7];
+
+  // scalar tail
+  const f32 *pEnd2 = ((f32 *)pVect1v) + qty;
+  while (pVect1 < pEnd2) {
+    dot += (*pVect1) * (*pVect2);
+    pVect1++;
+    pVect2++;
+  }
+
+  return 1.0f - (dot / (storedMag * queryMag));
 }
 #endif
 
@@ -504,6 +604,28 @@ static f32 distance_cosine_int8(const void *pA, const void *pB,
   return 1 - (dot / (sqrt(aMag) * sqrt(bMag)));
 }
 
+static f32 compute_magnitude_float(const f32 *v, size_t dimensions) {
+  f32 mag = 0;
+  for (size_t i = 0; i < dimensions; i++) {
+    mag += v[i] * v[i];
+  }
+  return (f32)sqrt(mag);
+}
+
+static f32 distance_cosine_float_precomputed_mags(
+    const void *pVect1v, const void *pVect2v, const void *qty_ptr,
+    f32 storedMag, f32 queryMag) {
+  f32 *pVect1 = (f32 *)pVect1v;
+  f32 *pVect2 = (f32 *)pVect2v;
+  size_t qty = *((size_t *)qty_ptr);
+
+  f32 dot = 0;
+  for (size_t i = 0; i < qty; i++) {
+    dot += pVect1[i] * pVect2[i];
+  }
+  return 1.0f - (dot / (storedMag * queryMag));
+}
+
 // https://github.com/facebookresearch/faiss/blob/77e2e79cd0a680adc343b9840dd865da724c579e/faiss/utils/hamming_distance/common.h#L34
 static u8 hamdist_table[256] = {
     0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4, 1, 2, 2, 3, 2, 3, 3, 4,
@@ -575,6 +697,14 @@ f32 _test_distance_l2_sqr_float(const f32 *a, const f32 *b, size_t dims) {
 }
 f32 _test_distance_cosine_float(const f32 *a, const f32 *b, size_t dims) {
   return distance_cosine_float(a, b, &dims);
+}
+f32 _test_distance_cosine_float_precomputed_mags(const f32 *a, const f32 *b,
+                                                  size_t dims, f32 aMag,
+                                                  f32 bMag) {
+  return distance_cosine_float_precomputed_mags(a, b, &dims, aMag, bMag);
+}
+f32 _test_compute_magnitude_float(const f32 *v, size_t dims) {
+  return compute_magnitude_float(v, dims);
 }
 f32 _test_distance_hamming(const u8 *a, const u8 *b, size_t dims) {
   return distance_hamming(a, b, &dims);
@@ -1198,7 +1328,11 @@ static void vec_distance_cosine(sqlite3_context *context, int argc,
     goto finish;
   }
   case SQLITE_VEC_ELEMENT_TYPE_FLOAT32: {
+#ifdef SQLITE_VEC_ENABLE_AVX
+    f32 result = distance_cosine_float_avx(a, b, &dimensions);
+#else
     f32 result = distance_cosine_float(a, b, &dimensions);
+#endif
     sqlite3_result_double(context, result);
     goto finish;
   }
@@ -3474,7 +3608,8 @@ static sqlite3_module vec_npy_eachModule = {
 #define VEC0_SHADOW_VECTOR_N_CREATE                                            \
   "CREATE TABLE " VEC0_SHADOW_VECTOR_N_NAME "("                                \
   "rowid PRIMARY KEY,"                                                         \
-  "vectors BLOB NOT NULL"                                                      \
+  "vectors BLOB NOT NULL,"                                                     \
+  "magnitudes BLOB"                                                            \
   ");"
 
 #define VEC0_SHADOW_AUXILIARY_NAME "\"%w\".\"%w_auxiliary\""
@@ -4570,8 +4705,8 @@ int vec0_new_chunk(vec0_vtab *p, sqlite3_value ** partitionKeyValues, i64 *chunk
 
     // See SHADOW_TABLE_ROWID_QUIRK above for why _rowid_ and rowid are both set.
     zSql = sqlite3_mprintf("INSERT INTO " VEC0_SHADOW_VECTOR_N_NAME
-                           "(_rowid_, rowid, vectors)"
-                           "VALUES (?, ?, ?)",
+                           "(_rowid_, rowid, vectors, magnitudes)"
+                           "VALUES (?, ?, ?, ?)",
                            p->schemaName, p->tableName, vector_column_idx);
     if (!zSql) {
       return SQLITE_NOMEM;
@@ -4587,6 +4722,8 @@ int vec0_new_chunk(vec0_vtab *p, sqlite3_value ** partitionKeyValues, i64 *chunk
     sqlite3_bind_int64(stmt, 1, rowid);  // _rowid_ (internal SQLite rowid)
     sqlite3_bind_int64(stmt, 2, rowid);  // rowid   (user-defined column)
     sqlite3_bind_zeroblob64(stmt, 3, vectorsSize);
+    // magnitudes blob: one f32 per slot in the chunk
+    sqlite3_bind_zeroblob64(stmt, 4, p->chunk_size * sizeof(f32));
 
     rc = sqlite3_step(stmt);
     sqlite3_finalize(stmt);
@@ -6752,6 +6889,28 @@ int vec0Filter_knn_chunks_iter(vec0_vtab *p, sqlite3_stmt *stmtChunks,
     }
   }
 
+  // Precompute query vector magnitude once for cosine distance
+  f32 queryMag = 0;
+  int useCosinePrecomputed =
+      (vector_column->distance_metric == VEC0_DISTANCE_METRIC_COSINE &&
+       vector_column->element_type == SQLITE_VEC_ELEMENT_TYPE_FLOAT32);
+  if (useCosinePrecomputed) {
+    f32 *qv = (f32 *)queryVector;
+    for (size_t qi = 0; qi < vector_column->dimensions; qi++) {
+      queryMag += qv[qi] * qv[qi];
+    }
+    queryMag = (f32)sqrt(queryMag);
+  }
+
+  f32 *baseMagnitudes = NULL;
+  if (useCosinePrecomputed) {
+    baseMagnitudes = sqlite3_malloc(p->chunk_size * sizeof(f32));
+    if (!baseMagnitudes) {
+      rc = SQLITE_NOMEM;
+      goto cleanup;
+    }
+  }
+
   while (true) {
     rc = sqlite3_step(stmtChunks);
     if (rc == SQLITE_DONE) {
@@ -6824,6 +6983,30 @@ int vec0Filter_knn_chunks_iter(vec0_vtab *p, sqlite3_stmt *stmtChunks,
       goto cleanup;
     }
 
+    // Load precomputed magnitudes for cosine distance
+    if (useCosinePrecomputed && baseMagnitudes) {
+      sqlite3_blob *blobMagnitudes = NULL;
+      rc = sqlite3_blob_open(p->db, p->schemaName,
+                             p->shadowVectorChunksNames[vectorColumnIdx],
+                             "magnitudes", chunk_id, 0, &blobMagnitudes);
+      if (rc != SQLITE_OK) {
+        vtab_set_error(&p->base,
+                       "could not open magnitudes blob for chunk %lld",
+                       chunk_id);
+        rc = SQLITE_ERROR;
+        goto cleanup;
+      }
+      rc = sqlite3_blob_read(blobMagnitudes, baseMagnitudes,
+                             p->chunk_size * sizeof(f32), 0);
+      sqlite3_blob_close(blobMagnitudes);
+      if (rc != SQLITE_OK) {
+        vtab_set_error(&p->base,
+                       "magnitudes blob read error for chunk %lld", chunk_id);
+        rc = SQLITE_ERROR;
+        goto cleanup;
+      }
+    }
+
     bitmap_copy(b, chunkValidity, p->chunk_size);
     if (arrayRowidsIn) {
       bitmap_clear(bmRowids, p->chunk_size);
@@ -6893,8 +7076,26 @@ int vec0Filter_knn_chunks_iter(vec0_vtab *p, sqlite3_stmt *stmtChunks,
           break;
         }
         case VEC0_DISTANCE_METRIC_COSINE: {
-          result = distance_cosine_float(base_i, (f32 *)queryVector,
-                                         &vector_column->dimensions);
+          if (useCosinePrecomputed && baseMagnitudes &&
+              baseMagnitudes[i] > 0) {
+#ifdef SQLITE_VEC_ENABLE_AVX
+            result = distance_cosine_float_avx_precomputed_mags(
+                base_i, (f32 *)queryVector, &vector_column->dimensions,
+                baseMagnitudes[i], queryMag);
+#else
+            result = distance_cosine_float_precomputed_mags(
+                base_i, (f32 *)queryVector, &vector_column->dimensions,
+                baseMagnitudes[i], queryMag);
+#endif
+          } else {
+#ifdef SQLITE_VEC_ENABLE_AVX
+            result = distance_cosine_float_avx(
+                base_i, (f32 *)queryVector, &vector_column->dimensions);
+#else
+            result = distance_cosine_float(base_i, (f32 *)queryVector,
+                                           &vector_column->dimensions);
+#endif
+          }
           break;
         }
         }
@@ -7023,6 +7224,7 @@ cleanup:
   sqlite3_free(bmRowids);
   sqlite3_free(baseVectors);
   sqlite3_free(chunk_distances);
+  sqlite3_free(baseMagnitudes);
   sqlite3_free(bmMetadata);
   for(int i = 0; i < VEC0_MAX_METADATA_COLUMNS; i++) {
     sqlite3_blob_close(metadataBlobs[i]);
@@ -8138,6 +8340,37 @@ int vec0Update_InsertWriteFinalStep(vec0_vtab *p, i64 chunk_rowid,
       rc = SQLITE_ERROR;
       goto cleanup;
     }
+
+    // Compute and store magnitude for cosine distance columns
+    if (p->vector_columns[i].distance_metric == VEC0_DISTANCE_METRIC_COSINE &&
+        p->vector_columns[i].element_type == SQLITE_VEC_ELEMENT_TYPE_FLOAT32) {
+      f32 mag = compute_magnitude_float((f32 *)vectorDatas[i],
+                                        p->vector_columns[i].dimensions);
+      sqlite3_blob *blobMagnitudes;
+      rc = sqlite3_blob_open(p->db, p->schemaName,
+                             p->shadowVectorChunksNames[i], "magnitudes",
+                             chunk_rowid, 1, &blobMagnitudes);
+      if (rc != SQLITE_OK) {
+        vtab_set_error(&p->base,
+                       VEC_INTERAL_ERROR
+                       "could not open magnitudes blob on %s.%s.%lld",
+                       p->schemaName, p->shadowVectorChunksNames[i],
+                       chunk_rowid);
+        goto cleanup;
+      }
+      rc = sqlite3_blob_write(blobMagnitudes, &mag, sizeof(f32),
+                              chunk_offset * sizeof(f32));
+      brc = sqlite3_blob_close(blobMagnitudes);
+      if (rc != SQLITE_OK || brc != SQLITE_OK) {
+        vtab_set_error(&p->base,
+                       VEC_INTERAL_ERROR
+                       "could not write magnitude on %s.%s.%lld",
+                       p->schemaName, p->shadowVectorChunksNames[i],
+                       chunk_rowid);
+        rc = rc != SQLITE_OK ? rc : brc;
+        goto cleanup;
+      }
+    }
   }
 
   // write the new rowid to the rowids column of the _chunks table
@@ -9131,6 +9364,28 @@ int vec0Update_UpdateVectorColumn(vec0_vtab *p, i64 chunk_id, i64 chunk_offset,
     vtab_set_error(&p->base, "Could not write to vectors blob for %s.%s.%lld",
                    p->schemaName, p->shadowVectorChunksNames[i], chunk_id);
     goto cleanup;
+  }
+
+  // Recompute magnitude on update for cosine distance columns
+  if (p->vector_columns[i].distance_metric == VEC0_DISTANCE_METRIC_COSINE &&
+      p->vector_columns[i].element_type == SQLITE_VEC_ELEMENT_TYPE_FLOAT32) {
+    f32 mag = compute_magnitude_float((f32 *)vector,
+                                      p->vector_columns[i].dimensions);
+    sqlite3_blob *blobMagnitudes = NULL;
+    rc = sqlite3_blob_open(p->db, p->schemaName,
+                           p->shadowVectorChunksNames[i], "magnitudes",
+                           chunk_id, 1, &blobMagnitudes);
+    if (rc == SQLITE_OK) {
+      rc = sqlite3_blob_write(blobMagnitudes, &mag, sizeof(f32),
+                              chunk_offset * sizeof(f32));
+      sqlite3_blob_close(blobMagnitudes);
+      if (rc != SQLITE_OK) {
+        vtab_set_error(&p->base,
+                       "Could not update magnitude for %s.%s.%lld",
+                       p->schemaName, p->shadowVectorChunksNames[i], chunk_id);
+        goto cleanup;
+      }
+    }
   }
 
 cleanup:

@@ -1,10 +1,13 @@
 # Build and run the insert+query benchmark using MSVC on Windows.
 # Usage:
-#   .\scripts\bench-insert-query-msvc.ps1          # scalar (no SIMD)
-#   .\scripts\bench-insert-query-msvc.ps1 -Avx     # with AVX2
+#   .\scripts\bench-insert-query-msvc.ps1                    # scalar (no SIMD)
+#   .\scripts\bench-insert-query-msvc.ps1 -Avx               # with AVX2
+#   .\scripts\bench-insert-query-msvc.ps1 -Threads            # with multithreaded KNN
+#   .\scripts\bench-insert-query-msvc.ps1 -Avx -Threads       # AVX2 + threads
 
 param(
-    [switch]$Avx
+    [switch]$Avx,
+    [switch]$Threads
 )
 
 $ErrorActionPreference = "Stop"
@@ -16,6 +19,12 @@ $simdFlags = @()
 if ($Avx) {
     $simdFlags = @("/DSQLITE_VEC_ENABLE_AVX", "/arch:AVX2")
     Write-Host "Building with AVX2 enabled..."
+}
+
+$threadFlags = @()
+if ($Threads) {
+    $threadFlags = @("/DSQLITE_VEC_ENABLE_THREADS")
+    Write-Host "Building with threading enabled..."
 }
 
 if (-not (Test-Path dist)) { New-Item -ItemType Directory -Path dist | Out-Null }
@@ -58,7 +67,7 @@ cmd /c "`"$vcvars`" >nul 2>&1 && set" | ForEach-Object {
 $clArgs = @(
     "/nologo", "/O2",
     "/DSQLITE_CORE"
-) + $simdFlags + @(
+) + $simdFlags + $threadFlags + @(
     "benchmarks\bench-insert-query.c", "sqlite-vec.c", "vendor\sqlite3.c",
     "/I.", "/Ivendor",
     "/Fe:dist\bench-insert-query.exe",

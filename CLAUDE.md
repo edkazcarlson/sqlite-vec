@@ -30,6 +30,19 @@ Run a single Python test:
 uv run --managed-python --project tests pytest -vv -s -x -k test_name tests/test-loadable.py
 ```
 
+## Windows Build Commands (MSVC)
+
+On Windows without `make`/`gcc`, use the PowerShell scripts that invoke MSVC (`cl.exe`) via `vcvars64.bat`:
+
+```powershell
+.\scripts\test-unit-msvc.ps1          # C unit tests (scalar, no SIMD)
+.\scripts\test-unit-msvc.ps1 -Avx     # C unit tests with AVX2 enabled
+.\scripts\bench-insert-query-msvc.ps1          # Benchmark (scalar)
+.\scripts\bench-insert-query-msvc.ps1 -Avx     # Benchmark with AVX2
+```
+
+Requires Visual Studio 2022 Community (specifically `vcvars64.bat`). The scripts auto-generate `sqlite-vec.h` from the template if needed.
+
 ## Formatting and Linting
 
 ```bash

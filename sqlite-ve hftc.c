@@ -87,6 +87,34 @@ typedef size_t usize;
 #define UNUSED_PARAMETER(X) (void)(X)
 #endif
 
+// H6: Portable force-inline for hot distance functions.
+#ifdef _MSC_VER
+#define SQLITE_VEC_ALWAYS_INLINE static __forceinline
+#elif defined(__GNUC__) || defined(__clang__)
+#define SQLITE_VEC_ALWAYS_INLINE static __attribute__((always_inline)) inline
+#else
+#define SQLITE_VEC_ALWAYS_INLINE static inline
+#endif
+
+// H7: Portable software prefetch.
+#if defined(__GNUC__) || defined(__clang__)
+#define SQLITE_VEC_PREFETCH(addr) __builtin_prefetch((addr), 0, 0)
+#elif defined(_MSC_VER) && (defined(_M_X64) || defined(_M_IX86))
+#include <xmmintrin.h>
+#define SQLITE_VEC_PREFETCH(addr) _mm_prefetch((const char *)(addr), _MM_HINT_T0)
+#else
+#define SQLITE_VEC_PREFETCH(addr) ((void)0)
+#endif
+
+// M5: Branch prediction hints for error paths.
+#if defined(__GNUC__) || defined(__clang__)
+#define SQLITE_VEC_UNLIKELY(x) __builtin_expect(!!(x), 0)
+#define SQLITE_VEC_LIKELY(x)   __builtin_expect(!!(x), 1)
+#else
+#define SQLITE_VEC_UNLIKELY(x) (x)
+#define SQLITE_VEC_LIKELY(x)   (x)
+#endif
+
 // sqlite3_vtab_in() was added in SQLite version 3.38 (2022-02-22)
 // https://www.sqlite.org/changes.html#version_3_38_0
 #if SQLITE_VERSION_NUMBER >= 3038000
@@ -110,9 +138,7 @@ typedef size_t usize;
 #endif
 
 #define countof(x) (sizeof(x) / sizeof((x)[0]))
-#ifndef min
 #define min(a, b) (((a) <= (b)) ? (a) : (b))
-#endif
 
 enum VectorElementType {
   // clang-format off
@@ -124,46 +150,61 @@ enum VectorElementType {
 
 #ifdef SQLITE_VEC_ENABLE_AVX
 #include <immintrin.h>
-#ifdef _MSC_VER
-#define PORTABLE_ALIGN32 __declspec(align(32))
-#define PORTABLE_ALIGN64 __declspec(align(64))
-#else
 #define PORTABLE_ALIGN32 __attribute__((aligned(32)))
 #define PORTABLE_ALIGN64 __attribute__((aligned(64)))
-#endif
 
+// H5: Multi-accumulator AVX2 L2 with FMA, proper horizontal reduction, scalar tail.
 static f32 l2_sqr_float_avx(const void *pVect1v, const void *pVect2v,
                             const void *qty_ptr) {
-  f32 *pVect1 = (f32 *)pVect1v;
-  f32 *pVect2 = (f32 *)pVect2v;
-  size_t qty = *((size_t *)qty_ptr);
-  f32 PORTABLE_ALIGN32 TmpRes[8];
-  size_t qty16 = qty >> 4;
+  const f32 *pVect1 = (const f32 *)pVect1v;
+  const f32 *pVect2 = (const f32 *)pVect2v;
+  size_t qty = *((const size_t *)qty_ptr);
 
-  const f32 *pEnd1 = pVect1 + (qty16 << 4);
+  // 4 independent accumulators to exploit instruction-level parallelism.
+  __m256 sum0 = _mm256_setzero_ps();
+  __m256 sum1 = _mm256_setzero_ps();
+  __m256 sum2 = _mm256_setzero_ps();
+  __m256 sum3 = _mm256_setzero_ps();
 
-  __m256 diff, v1, v2;
-  __m256 sum = _mm256_set1_ps(0);
-
-  while (pVect1 < pEnd1) {
-    v1 = _mm256_loadu_ps(pVect1);
-    pVect1 += 8;
-    v2 = _mm256_loadu_ps(pVect2);
-    pVect2 += 8;
-    diff = _mm256_sub_ps(v1, v2);
-    sum = _mm256_add_ps(sum, _mm256_mul_ps(diff, diff));
-
-    v1 = _mm256_loadu_ps(pVect1);
-    pVect1 += 8;
-    v2 = _mm256_loadu_ps(pVect2);
-    pVect2 += 8;
-    diff = _mm256_sub_ps(v1, v2);
-    sum = _mm256_add_ps(sum, _mm256_mul_ps(diff, diff));
+  // Process 32 floats per iteration (4 x 8-wide AVX).
+  size_t i = 0;
+  for (; i + 31 < qty; i += 32) {
+    __m256 d0 = _mm256_sub_ps(_mm256_loadu_ps(pVect1 + i),      _mm256_loadu_ps(pVect2 + i));
+    __m256 d1 = _mm256_sub_ps(_mm256_loadu_ps(pVect1 + i + 8),  _mm256_loadu_ps(pVect2 + i + 8));
+    __m256 d2 = _mm256_sub_ps(_mm256_loadu_ps(pVect1 + i + 16), _mm256_loadu_ps(pVect2 + i + 16));
+    __m256 d3 = _mm256_sub_ps(_mm256_loadu_ps(pVect1 + i + 24), _mm256_loadu_ps(pVect2 + i + 24));
+    // FMA: sum += diff * diff (available on all AVX2 CPUs).
+    sum0 = _mm256_fmadd_ps(d0, d0, sum0);
+    sum1 = _mm256_fmadd_ps(d1, d1, sum1);
+    sum2 = _mm256_fmadd_ps(d2, d2, sum2);
+    sum3 = _mm256_fmadd_ps(d3, d3, sum3);
   }
 
-  _mm256_store_ps(TmpRes, sum);
-  return sqrt(TmpRes[0] + TmpRes[1] + TmpRes[2] + TmpRes[3] + TmpRes[4] +
-              TmpRes[5] + TmpRes[6] + TmpRes[7]);
+  // Combine accumulators.
+  __m256 sum = _mm256_add_ps(_mm256_add_ps(sum0, sum1), _mm256_add_ps(sum2, sum3));
+
+  // Handle remaining 8-float blocks.
+  for (; i + 7 < qty; i += 8) {
+    __m256 d = _mm256_sub_ps(_mm256_loadu_ps(pVect1 + i), _mm256_loadu_ps(pVect2 + i));
+    sum = _mm256_fmadd_ps(d, d, sum);
+  }
+
+  // Proper horizontal reduction using SSE intrinsics.
+  __m128 hi = _mm256_extractf128_ps(sum, 1);
+  __m128 lo = _mm256_castps256_ps128(sum);
+  __m128 r = _mm_add_ps(lo, hi);
+  r = _mm_hadd_ps(r, r);
+  r = _mm_hadd_ps(r, r);
+  f32 result;
+  _mm_store_ss(&result, r);
+
+  // Scalar tail for remaining elements (removes dims%16==0 restriction).
+  for (; i < qty; i++) {
+    f32 d = pVect1[i] - pVect2[i];
+    result += d * d;
+  }
+
+  return sqrtf(result);
 }
 #endif
 
@@ -228,7 +269,7 @@ static f32 l2_sqr_float_neon(const void *pVect1v, const void *pVect2v,
     pVect2++;
   }
 
-  return sqrt(sum_scalar);
+  return sqrtf(sum_scalar);
 }
 
 static f32 l2_sqr_int8_neon(const void *pVect1v, const void *pVect2v,
@@ -365,35 +406,57 @@ static double l1_f32_neon(const void *pVect1v, const void *pVect2v,
 }
 #endif
 
-static f32 l2_sqr_float(const void *pVect1v, const void *pVect2v,
-                        const void *qty_ptr) {
-  f32 *pVect1 = (f32 *)pVect1v;
-  f32 *pVect2 = (f32 *)pVect2v;
-  size_t qty = *((size_t *)qty_ptr);
+// M3: 4x unrolled with independent accumulators for ILP.
+SQLITE_VEC_ALWAYS_INLINE f32 l2_sqr_float(const void *pVect1v, const void *pVect2v,
+                                          const void *qty_ptr) {
+  const f32 *p1 = (const f32 *)pVect1v;
+  const f32 *p2 = (const f32 *)pVect2v;
+  size_t qty = *((const size_t *)qty_ptr);
 
-  f32 res = 0;
-  for (size_t i = 0; i < qty; i++) {
-    f32 t = *pVect1 - *pVect2;
-    pVect1++;
-    pVect2++;
+  f32 r0 = 0, r1 = 0, r2 = 0, r3 = 0;
+  size_t i = 0;
+  for (; i + 3 < qty; i += 4) {
+    f32 t0 = p1[i]   - p2[i];
+    f32 t1 = p1[i+1] - p2[i+1];
+    f32 t2 = p1[i+2] - p2[i+2];
+    f32 t3 = p1[i+3] - p2[i+3];
+    r0 += t0 * t0;
+    r1 += t1 * t1;
+    r2 += t2 * t2;
+    r3 += t3 * t3;
+  }
+  f32 res = r0 + r1 + r2 + r3;
+  for (; i < qty; i++) {
+    f32 t = p1[i] - p2[i];
     res += t * t;
   }
-  return sqrt(res);
+  return sqrtf(res);
 }
 
-static f32 l2_sqr_int8(const void *pA, const void *pB, const void *pD) {
-  i8 *a = (i8 *)pA;
-  i8 *b = (i8 *)pB;
-  size_t d = *((size_t *)pD);
+// M3: 4x unrolled.
+SQLITE_VEC_ALWAYS_INLINE f32 l2_sqr_int8(const void *pA, const void *pB, const void *pD) {
+  const i8 *a = (const i8 *)pA;
+  const i8 *b = (const i8 *)pB;
+  size_t d = *((const size_t *)pD);
 
-  f32 res = 0;
-  for (size_t i = 0; i < d; i++) {
-    f32 t = *a - *b;
-    a++;
-    b++;
+  f32 r0 = 0, r1 = 0, r2 = 0, r3 = 0;
+  size_t i = 0;
+  for (; i + 3 < d; i += 4) {
+    f32 t0 = (f32)(a[i]   - b[i]);
+    f32 t1 = (f32)(a[i+1] - b[i+1]);
+    f32 t2 = (f32)(a[i+2] - b[i+2]);
+    f32 t3 = (f32)(a[i+3] - b[i+3]);
+    r0 += t0 * t0;
+    r1 += t1 * t1;
+    r2 += t2 * t2;
+    r3 += t3 * t3;
+  }
+  f32 res = r0 + r1 + r2 + r3;
+  for (; i < d; i++) {
+    f32 t = (f32)(a[i] - b[i]);
     res += t * t;
   }
-  return sqrt(res);
+  return sqrtf(res);
 }
 
 static f32 distance_l2_sqr_float(const void *a, const void *b, const void *d) {
@@ -403,7 +466,8 @@ static f32 distance_l2_sqr_float(const void *a, const void *b, const void *d) {
   }
 #endif
 #ifdef SQLITE_VEC_ENABLE_AVX
-  if (((*(const size_t *)d) % 16 == 0)) {
+  // H5: Scalar tail loop in AVX version handles any dimension count.
+  {
     return l2_sqr_float_avx(a, b, d);
   }
 #endif
@@ -419,18 +483,24 @@ static f32 distance_l2_sqr_int8(const void *a, const void *b, const void *d) {
   return l2_sqr_int8(a, b, d);
 }
 
-static i32 l1_int8(const void *pA, const void *pB, const void *pD) {
-  i8 *a = (i8 *)pA;
-  i8 *b = (i8 *)pB;
-  size_t d = *((size_t *)pD);
+// M3: 4x unrolled.
+SQLITE_VEC_ALWAYS_INLINE i32 l1_int8(const void *pA, const void *pB, const void *pD) {
+  const i8 *a = (const i8 *)pA;
+  const i8 *b = (const i8 *)pB;
+  size_t d = *((const size_t *)pD);
 
-  i32 res = 0;
-  for (size_t i = 0; i < d; i++) {
-    res += abs(*a - *b);
-    a++;
-    b++;
+  i32 r0 = 0, r1 = 0, r2 = 0, r3 = 0;
+  size_t i = 0;
+  for (; i + 3 < d; i += 4) {
+    r0 += abs(a[i]   - b[i]);
+    r1 += abs(a[i+1] - b[i+1]);
+    r2 += abs(a[i+2] - b[i+2]);
+    r3 += abs(a[i+3] - b[i+3]);
   }
-
+  i32 res = r0 + r1 + r2 + r3;
+  for (; i < d; i++) {
+    res += abs(a[i] - b[i]);
+  }
   return res;
 }
 
@@ -443,65 +513,98 @@ static i32 distance_l1_int8(const void *a, const void *b, const void *d) {
   return l1_int8(a, b, d);
 }
 
-static double l1_f32(const void *pA, const void *pB, const void *pD) {
-  f32 *a = (f32 *)pA;
-  f32 *b = (f32 *)pB;
-  size_t d = *((size_t *)pD);
+// H3: Use f32 throughout instead of double to avoid type promotion overhead.
+// M3: 4x unrolled.
+SQLITE_VEC_ALWAYS_INLINE f32 l1_f32(const void *pA, const void *pB, const void *pD) {
+  const f32 *a = (const f32 *)pA;
+  const f32 *b = (const f32 *)pB;
+  size_t d = *((const size_t *)pD);
 
-  double res = 0;
-  for (size_t i = 0; i < d; i++) {
-    res += fabs((double)*a - (double)*b);
-    a++;
-    b++;
+  f32 r0 = 0, r1 = 0, r2 = 0, r3 = 0;
+  size_t i = 0;
+  for (; i + 3 < d; i += 4) {
+    r0 += fabsf(a[i]   - b[i]);
+    r1 += fabsf(a[i+1] - b[i+1]);
+    r2 += fabsf(a[i+2] - b[i+2]);
+    r3 += fabsf(a[i+3] - b[i+3]);
   }
-
+  f32 res = r0 + r1 + r2 + r3;
+  for (; i < d; i++) {
+    res += fabsf(a[i] - b[i]);
+  }
   return res;
 }
 
-static double distance_l1_f32(const void *a, const void *b, const void *d) {
+static f32 distance_l1_f32(const void *a, const void *b, const void *d) {
 #ifdef SQLITE_VEC_ENABLE_NEON
   if ((*(const size_t *)d) > 3) {
-    return l1_f32_neon(a, b, d);
+    return (f32)l1_f32_neon(a, b, d);
   }
 #endif
   return l1_f32(a, b, d);
 }
 
-static f32 distance_cosine_float(const void *pVect1v, const void *pVect2v,
-                                 const void *qty_ptr) {
-  f32 *pVect1 = (f32 *)pVect1v;
-  f32 *pVect2 = (f32 *)pVect2v;
-  size_t qty = *((size_t *)qty_ptr);
+// M3: 4x unrolled with 12 independent accumulators for ILP.
+SQLITE_VEC_ALWAYS_INLINE f32 distance_cosine_float(const void *pVect1v, const void *pVect2v,
+                                                   const void *qty_ptr) {
+  const f32 *p1 = (const f32 *)pVect1v;
+  const f32 *p2 = (const f32 *)pVect2v;
+  size_t qty = *((const size_t *)qty_ptr);
 
-  f32 dot = 0;
-  f32 aMag = 0;
-  f32 bMag = 0;
-  for (size_t i = 0; i < qty; i++) {
-    dot += *pVect1 * *pVect2;
-    aMag += *pVect1 * *pVect1;
-    bMag += *pVect2 * *pVect2;
-    pVect1++;
-    pVect2++;
+  f32 dot0 = 0, dot1 = 0, dot2 = 0, dot3 = 0;
+  f32 am0 = 0, am1 = 0, am2 = 0, am3 = 0;
+  f32 bm0 = 0, bm1 = 0, bm2 = 0, bm3 = 0;
+  size_t i = 0;
+  for (; i + 3 < qty; i += 4) {
+    dot0 += p1[i]   * p2[i];   am0 += p1[i]   * p1[i];   bm0 += p2[i]   * p2[i];
+    dot1 += p1[i+1] * p2[i+1]; am1 += p1[i+1] * p1[i+1]; bm1 += p2[i+1] * p2[i+1];
+    dot2 += p1[i+2] * p2[i+2]; am2 += p1[i+2] * p1[i+2]; bm2 += p2[i+2] * p2[i+2];
+    dot3 += p1[i+3] * p2[i+3]; am3 += p1[i+3] * p1[i+3]; bm3 += p2[i+3] * p2[i+3];
   }
-  return 1 - (dot / (sqrt(aMag) * sqrt(bMag)));
+  f32 dot = dot0 + dot1 + dot2 + dot3;
+  f32 aMag = am0 + am1 + am2 + am3;
+  f32 bMag = bm0 + bm1 + bm2 + bm3;
+  for (; i < qty; i++) {
+    dot += p1[i] * p2[i];
+    aMag += p1[i] * p1[i];
+    bMag += p2[i] * p2[i];
+  }
+  // H4: Single sqrtf instead of two sqrt calls; short-circuit on zero magnitude.
+  f32 denom = sqrtf(aMag * bMag);
+  if (denom == 0.0f) return 1.0f;
+  return 1.0f - (dot / denom);
 }
-static f32 distance_cosine_int8(const void *pA, const void *pB,
-                                const void *pD) {
-  i8 *a = (i8 *)pA;
-  i8 *b = (i8 *)pB;
-  size_t d = *((size_t *)pD);
+// M3: 4x unrolled.
+SQLITE_VEC_ALWAYS_INLINE f32 distance_cosine_int8(const void *pA, const void *pB,
+                                                  const void *pD) {
+  const i8 *a = (const i8 *)pA;
+  const i8 *b = (const i8 *)pB;
+  size_t d = *((const size_t *)pD);
 
-  f32 dot = 0;
-  f32 aMag = 0;
-  f32 bMag = 0;
-  for (size_t i = 0; i < d; i++) {
-    dot += *a * *b;
-    aMag += *a * *a;
-    bMag += *b * *b;
-    a++;
-    b++;
+  f32 dot0 = 0, dot1 = 0, dot2 = 0, dot3 = 0;
+  f32 am0 = 0, am1 = 0, am2 = 0, am3 = 0;
+  f32 bm0 = 0, bm1 = 0, bm2 = 0, bm3 = 0;
+  size_t i = 0;
+  for (; i + 3 < d; i += 4) {
+    f32 a0 = (f32)a[i], a1 = (f32)a[i+1], a2 = (f32)a[i+2], a3 = (f32)a[i+3];
+    f32 b0 = (f32)b[i], b1 = (f32)b[i+1], b2 = (f32)b[i+2], b3 = (f32)b[i+3];
+    dot0 += a0 * b0; am0 += a0 * a0; bm0 += b0 * b0;
+    dot1 += a1 * b1; am1 += a1 * a1; bm1 += b1 * b1;
+    dot2 += a2 * b2; am2 += a2 * a2; bm2 += b2 * b2;
+    dot3 += a3 * b3; am3 += a3 * a3; bm3 += b3 * b3;
   }
-  return 1 - (dot / (sqrt(aMag) * sqrt(bMag)));
+  f32 dot = dot0 + dot1 + dot2 + dot3;
+  f32 aMag = am0 + am1 + am2 + am3;
+  f32 bMag = bm0 + bm1 + bm2 + bm3;
+  for (; i < d; i++) {
+    f32 av = (f32)a[i], bv = (f32)b[i];
+    dot += av * bv;
+    aMag += av * av;
+    bMag += bv * bv;
+  }
+  f32 denom = sqrtf(aMag * bMag);
+  if (denom == 0.0f) return 1.0f;
+  return 1.0f - (dot / denom);
 }
 
 // https://github.com/facebookresearch/faiss/blob/77e2e79cd0a680adc343b9840dd865da724c579e/faiss/utils/hamming_distance/common.h#L34
@@ -518,7 +621,7 @@ static u8 hamdist_table[256] = {
     4, 5, 5, 6, 5, 6, 6, 7, 3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
     4, 5, 5, 6, 5, 6, 6, 7, 5, 6, 6, 7, 6, 7, 7, 8};
 
-static f32 distance_hamming_u8(u8 *a, u8 *b, size_t n) {
+SQLITE_VEC_ALWAYS_INLINE f32 distance_hamming_u8(u8 *a, u8 *b, size_t n) {
   int same = 0;
   for (unsigned long i = 0; i < n; i++) {
     same += hamdist_table[a[i] ^ b[i]];
@@ -544,7 +647,7 @@ static unsigned int __builtin_popcountl(unsigned int x) {
 #endif
 #endif
 
-static f32 distance_hamming_u64(u64 *a, u64 *b, size_t n) {
+SQLITE_VEC_ALWAYS_INLINE f32 distance_hamming_u64(u64 *a, u64 *b, size_t n) {
   int same = 0;
   for (unsigned long i = 0; i < n; i++) {
     same += __builtin_popcountl(a[i] ^ b[i]);
@@ -568,6 +671,31 @@ static f32 distance_hamming(const void *a, const void *b, const void *d) {
   }
   return distance_hamming_u8((u8 *)a, (u8 *)b, dimensions / CHAR_BIT);
 }
+
+/**
+ * Function pointer type for distance computation.
+ * All distance functions used in KNN hot loop must conform to this signature.
+ */
+typedef f32 (*vec0_distance_fn)(const void *, const void *, const void *);
+
+// L1 adapter functions: l1_f32/l1_int8/l1_f32_neon return non-f32 types,
+// but the KNN hot loop stores results as f32. Wrap them to match vec0_distance_fn.
+static f32 distance_l1_f32_as_f32(const void *a, const void *b, const void *d) {
+  return (f32)distance_l1_f32(a, b, d);
+}
+static f32 distance_l1_int8_as_f32(const void *a, const void *b, const void *d) {
+  return (f32)distance_l1_int8(a, b, d);
+}
+#ifdef SQLITE_VEC_ENABLE_NEON
+static f32 distance_l1_f32_neon_as_f32(const void *a, const void *b, const void *d) {
+  return (f32)l1_f32_neon(a, b, d);
+}
+static f32 distance_l1_int8_neon_as_f32(const void *a, const void *b, const void *d) {
+  return (f32)l1_int8_neon(a, b, d);
+}
+#endif
+
+// Note: resolve_distance_fn is defined later (after Vec0DistanceMetrics enum).
 
 #ifdef SQLITE_VEC_TEST
 f32 _test_distance_l2_sqr_float(const f32 *a, const f32 *b, size_t dims) {
@@ -1280,8 +1408,8 @@ static void vec_distance_l1(sqlite3_context *context, int argc,
     goto finish;
   }
   case SQLITE_VEC_ELEMENT_TYPE_FLOAT32: {
-    double result = distance_l1_f32(a, b, &dimensions);
-    sqlite3_result_double(context, result);
+    f32 result = distance_l1_f32(a, b, &dimensions);
+    sqlite3_result_double(context, (double)result);
     goto finish;
   }
   case SQLITE_VEC_ELEMENT_TYPE_INT8: {
@@ -2301,6 +2429,58 @@ struct Vec0PartitionColumnDefinition {
   char * name;
   int name_length;
 };
+
+/**
+ * Resolve the correct distance function pointer once per query, eliminating
+ * per-vector branch overhead in the KNN hot loop. Also resolves directly to
+ * the best SIMD variant based on dimensions (H1 + M2).
+ */
+static vec0_distance_fn resolve_distance_fn(
+    enum VectorElementType element_type,
+    enum Vec0DistanceMetrics distance_metric,
+    size_t dimensions) {
+  switch (element_type) {
+  case SQLITE_VEC_ELEMENT_TYPE_FLOAT32:
+    switch (distance_metric) {
+    case VEC0_DISTANCE_METRIC_L2:
+#ifdef SQLITE_VEC_ENABLE_NEON
+      if (dimensions > 16) return (vec0_distance_fn)l2_sqr_float_neon;
+#endif
+#ifdef SQLITE_VEC_ENABLE_AVX
+      // H5: Scalar tail loop means any dimension count works with AVX now.
+      return (vec0_distance_fn)l2_sqr_float_avx;
+#endif
+      return (vec0_distance_fn)l2_sqr_float;
+    case VEC0_DISTANCE_METRIC_COSINE:
+      return (vec0_distance_fn)distance_cosine_float;
+    case VEC0_DISTANCE_METRIC_L1:
+#ifdef SQLITE_VEC_ENABLE_NEON
+      if (dimensions > 3) return distance_l1_f32_neon_as_f32;
+#endif
+      return distance_l1_f32_as_f32;
+    }
+    break;
+  case SQLITE_VEC_ELEMENT_TYPE_INT8:
+    switch (distance_metric) {
+    case VEC0_DISTANCE_METRIC_L2:
+#ifdef SQLITE_VEC_ENABLE_NEON
+      if (dimensions > 7) return (vec0_distance_fn)l2_sqr_int8_neon;
+#endif
+      return (vec0_distance_fn)l2_sqr_int8;
+    case VEC0_DISTANCE_METRIC_COSINE:
+      return (vec0_distance_fn)distance_cosine_int8;
+    case VEC0_DISTANCE_METRIC_L1:
+#ifdef SQLITE_VEC_ENABLE_NEON
+      if (dimensions > 15) return distance_l1_int8_neon_as_f32;
+#endif
+      return distance_l1_int8_as_f32;
+    }
+    break;
+  case SQLITE_VEC_ELEMENT_TYPE_BIT:
+    return (vec0_distance_fn)distance_hamming;
+  }
+  return NULL;
+}
 
 struct Vec0AuxiliaryColumnDefinition {
   int type;
@@ -5937,7 +6117,8 @@ void bitmap_set(u8 *bitmap, i32 position, int value) {
   }
 }
 
-int bitmap_get(u8 *bitmap, i32 position) {
+// H6: Inlined — called per-vector in KNN hot loop.
+SQLITE_VEC_ALWAYS_INLINE int bitmap_get(u8 *bitmap, i32 position) {
   return (((bitmap[position / CHAR_BIT]) >> (position % CHAR_BIT)) & 1);
 }
 
@@ -5952,44 +6133,111 @@ void bitmap_fill(u8 *bitmap, i32 n) {
 }
 
 /**
- * @brief Finds the minimum k items in distances, and writes the indicies to
- * out.
+ * H2: Max-heap sift-down for top-K selection.
+ * Maintains heap property: parent distance >= child distances.
+ */
+static void heap_sift_down(f32 *heap_dist, i32 *heap_idx, i32 size, i32 i) {
+  while (1) {
+    i32 largest = i;
+    i32 left = 2 * i + 1;
+    i32 right = 2 * i + 2;
+    if (left < size && heap_dist[left] > heap_dist[largest])
+      largest = left;
+    if (right < size && heap_dist[right] > heap_dist[largest])
+      largest = right;
+    if (largest == i)
+      break;
+    f32 td = heap_dist[i]; heap_dist[i] = heap_dist[largest]; heap_dist[largest] = td;
+    i32 ti = heap_idx[i]; heap_idx[i] = heap_idx[largest]; heap_idx[largest] = ti;
+    i = largest;
+  }
+}
+
+/**
+ * @brief Finds the minimum k items in distances using a max-heap, O(n log k).
+ * Replaces the original O(k*n) selection sort.
  *
  * @param distances input f32 array of size n, the items to consider.
  * @param n: size of distances array.
- * @param out: Output array of size k, will contain at most k element indicies
- * @param k: Size of output array
- * @return int
+ * @param candidates: bitmap of valid candidates.
+ * @param out: Output array of size k, will contain at most k element indices (sorted ascending by distance).
+ * @param k: Size of output array.
+ * @param bTaken: unused (kept for API compat).
+ * @param k_used: number of results actually written to out.
+ * @return int SQLITE_OK
  */
 int min_idx(const f32 *distances, i32 n, u8 *candidates, i32 *out, i32 k,
             u8 *bTaken, i32 *k_used) {
   assert(k > 0);
   assert(k <= n);
+  UNUSED_PARAMETER(bTaken);
 
-  bitmap_clear(bTaken, n);
+  // Use dynamically-scoped arrays. Max chunk_size is bounded, but use k for heap.
+  f32 heap_dist_buf[1024];
+  i32 heap_idx_buf[1024];
+  f32 *heap_dist = heap_dist_buf;
+  i32 *heap_idx = heap_idx_buf;
 
-  for (int ik = 0; ik < k; ik++) {
-    int min_idx = 0;
-    while (min_idx < n &&
-           (bitmap_get(bTaken, min_idx) || !bitmap_get(candidates, min_idx))) {
-      min_idx++;
+  // If k > 1024, fall back to malloc (very rare in practice).
+  f32 *heap_dist_alloc = NULL;
+  i32 *heap_idx_alloc = NULL;
+  if (k > 1024) {
+    heap_dist_alloc = sqlite3_malloc(k * sizeof(f32));
+    heap_idx_alloc = sqlite3_malloc(k * sizeof(i32));
+    if (!heap_dist_alloc || !heap_idx_alloc) {
+      sqlite3_free(heap_dist_alloc);
+      sqlite3_free(heap_idx_alloc);
+      *k_used = 0;
+      return SQLITE_NOMEM;
     }
-    if (min_idx >= n) {
-      *k_used = ik;
-      return SQLITE_OK;
-    }
-
-    for (int i = 0; i < n; i++) {
-      if (distances[i] <= distances[min_idx] && !bitmap_get(bTaken, i) &&
-          (bitmap_get(candidates, i))) {
-        min_idx = i;
-      }
-    }
-
-    out[ik] = min_idx;
-    bitmap_set(bTaken, min_idx, 1);
+    heap_dist = heap_dist_alloc;
+    heap_idx = heap_idx_alloc;
   }
-  *k_used = k;
+
+  i32 heap_size = 0;
+
+  for (i32 i = 0; i < n; i++) {
+    if (!bitmap_get(candidates, i))
+      continue;
+
+    if (heap_size < k) {
+      // Phase 1: fill the heap
+      heap_dist[heap_size] = distances[i];
+      heap_idx[heap_size] = i;
+      heap_size++;
+      if (heap_size == k) {
+        // Build max-heap
+        for (i32 j = k / 2 - 1; j >= 0; j--)
+          heap_sift_down(heap_dist, heap_idx, heap_size, j);
+      }
+    } else if (distances[i] < heap_dist[0]) {
+      // Phase 2: replace max if current is smaller
+      heap_dist[0] = distances[i];
+      heap_idx[0] = i;
+      heap_sift_down(heap_dist, heap_idx, heap_size, 0);
+    }
+  }
+
+  // Build heap if we never filled it completely
+  if (heap_size > 0 && heap_size < k) {
+    for (i32 j = heap_size / 2 - 1; j >= 0; j--)
+      heap_sift_down(heap_dist, heap_idx, heap_size, j);
+  }
+
+  // Extract sorted ascending: repeatedly swap root (max) to end and sift down.
+  for (i32 i = heap_size - 1; i > 0; i--) {
+    f32 td = heap_dist[0]; heap_dist[0] = heap_dist[i]; heap_dist[i] = td;
+    i32 ti = heap_idx[0]; heap_idx[0] = heap_idx[i]; heap_idx[i] = ti;
+    heap_sift_down(heap_dist, heap_idx, i, 0);
+  }
+
+  for (i32 i = 0; i < heap_size; i++)
+    out[i] = heap_idx[i];
+
+  *k_used = heap_size;
+
+  sqlite3_free(heap_dist_alloc);
+  sqlite3_free(heap_idx_alloc);
   return SQLITE_OK;
 }
 
@@ -6752,17 +7000,25 @@ int vec0Filter_knn_chunks_iter(vec0_vtab *p, sqlite3_stmt *stmtChunks,
     }
   }
 
+  // H1: Resolve distance function pointer once before chunk loop.
+  // Eliminates nested switch dispatch per-vector (9 branches -> 1 indirect call).
+  vec0_distance_fn distance_fn = resolve_distance_fn(
+      vector_column->element_type,
+      vector_column->distance_metric,
+      vector_column->dimensions);
+  size_t single_vector_bytes = vector_column_byte_size(*vector_column);
+
   while (true) {
     rc = sqlite3_step(stmtChunks);
     if (rc == SQLITE_DONE) {
       break;
     }
-    if (rc != SQLITE_ROW) {
+    if (SQLITE_VEC_UNLIKELY(rc != SQLITE_ROW)) {
       vtab_set_error(&p->base, "chunks iter error");
       rc = SQLITE_ERROR;
       goto cleanup;
     }
-    memset(chunk_distances, 0, p->chunk_size * sizeof(f32));
+    // L2: Removed redundant memset of chunk_distances — bitmap gates all reads.
     memset(chunk_topk_idxs, 0, k * sizeof(i32));
     bitmap_clear(b, p->chunk_size);
 
@@ -6770,7 +7026,7 @@ int vec0Filter_knn_chunks_iter(vec0_vtab *p, sqlite3_stmt *stmtChunks,
     unsigned char *chunkValidity =
         (unsigned char *)sqlite3_column_blob(stmtChunks, 1);
     i64 validitySize = sqlite3_column_bytes(stmtChunks, 1);
-    if (validitySize != p->chunk_size / CHAR_BIT) {
+    if (SQLITE_VEC_UNLIKELY(validitySize != p->chunk_size / CHAR_BIT)) {
       // IMP: V05271_22109
       vtab_set_error(
           &p->base,
@@ -6782,7 +7038,7 @@ int vec0Filter_knn_chunks_iter(vec0_vtab *p, sqlite3_stmt *stmtChunks,
 
     i64 *chunkRowids = (i64 *)sqlite3_column_blob(stmtChunks, 2);
     i64 rowidsSize = sqlite3_column_bytes(stmtChunks, 2);
-    if (rowidsSize != p->chunk_size * sizeof(i64)) {
+    if (SQLITE_VEC_UNLIKELY(rowidsSize != p->chunk_size * sizeof(i64))) {
       // IMP: V02796_19635
       vtab_set_error(&p->base, "rowids size doesn't match");
       vtab_set_error(
@@ -6797,7 +7053,7 @@ int vec0Filter_knn_chunks_iter(vec0_vtab *p, sqlite3_stmt *stmtChunks,
     rc = sqlite3_blob_open(p->db, p->schemaName,
                            p->shadowVectorChunksNames[vectorColumnIdx],
                            "vectors", chunk_id, 0, &blobVectors);
-    if (rc != SQLITE_OK) {
+    if (SQLITE_VEC_UNLIKELY(rc != SQLITE_OK)) {
       vtab_set_error(&p->base, "could not open vectors blob for chunk %lld",
                      chunk_id);
       rc = SQLITE_ERROR;
@@ -6807,7 +7063,7 @@ int vec0Filter_knn_chunks_iter(vec0_vtab *p, sqlite3_stmt *stmtChunks,
     i64 currentBaseVectorsSize = sqlite3_blob_bytes(blobVectors);
     i64 expectedBaseVectorsSize =
         p->chunk_size * vector_column_byte_size(*vector_column);
-    if (currentBaseVectorsSize != expectedBaseVectorsSize) {
+    if (SQLITE_VEC_UNLIKELY(currentBaseVectorsSize != expectedBaseVectorsSize)) {
       // IMP: V16465_00535
       vtab_set_error(
           &p->base,
@@ -6818,7 +7074,7 @@ int vec0Filter_knn_chunks_iter(vec0_vtab *p, sqlite3_stmt *stmtChunks,
     }
     rc = sqlite3_blob_read(blobVectors, baseVectors, currentBaseVectorsSize, 0);
 
-    if (rc != SQLITE_OK) {
+    if (SQLITE_VEC_UNLIKELY(rc != SQLITE_OK)) {
       vtab_set_error(&p->base, "vectors blob read error for %lld", chunk_id);
       rc = SQLITE_ERROR;
       goto cleanup;
@@ -6871,115 +7127,53 @@ int vec0Filter_knn_chunks_iter(vec0_vtab *p, sqlite3_stmt *stmtChunks,
     }
 
 
+    // H1: Single indirect call per vector instead of nested switch.
+    // H7: Prefetch next vectors to hide memory latency.
     for (int i = 0; i < p->chunk_size; i++) {
       if (!bitmap_get(b, i)) {
         continue;
-      };
-
-      f32 result;
-      switch (vector_column->element_type) {
-      case SQLITE_VEC_ELEMENT_TYPE_FLOAT32: {
-        const f32 *base_i =
-            ((f32 *)baseVectors) + (i * vector_column->dimensions);
-        switch (vector_column->distance_metric) {
-        case VEC0_DISTANCE_METRIC_L2: {
-          result = distance_l2_sqr_float(base_i, (f32 *)queryVector,
-                                         &vector_column->dimensions);
-          break;
-        }
-        case VEC0_DISTANCE_METRIC_L1: {
-          result = distance_l1_f32(base_i, (f32 *)queryVector,
-                                   &vector_column->dimensions);
-          break;
-        }
-        case VEC0_DISTANCE_METRIC_COSINE: {
-          result = distance_cosine_float(base_i, (f32 *)queryVector,
-                                         &vector_column->dimensions);
-          break;
-        }
-        }
-        break;
       }
-      case SQLITE_VEC_ELEMENT_TYPE_INT8: {
-        const i8 *base_i =
-            ((i8 *)baseVectors) + (i * vector_column->dimensions);
-        switch (vector_column->distance_metric) {
-        case VEC0_DISTANCE_METRIC_L2: {
-          result = distance_l2_sqr_int8(base_i, (i8 *)queryVector,
-                                        &vector_column->dimensions);
-          break;
-        }
-        case VEC0_DISTANCE_METRIC_L1: {
-          result = distance_l1_int8(base_i, (i8 *)queryVector,
-                                    &vector_column->dimensions);
-          break;
-        }
-        case VEC0_DISTANCE_METRIC_COSINE: {
-          result = distance_cosine_int8(base_i, (i8 *)queryVector,
-                                        &vector_column->dimensions);
-          break;
-        }
-        }
-
-        break;
+      const void *base_i = (const u8 *)baseVectors + ((size_t)i * single_vector_bytes);
+      // Prefetch 2 vectors ahead to overlap memory load with computation.
+      if (i + 2 < p->chunk_size) {
+        const void *prefetch_ptr = (const u8 *)baseVectors + ((size_t)(i + 2) * single_vector_bytes);
+        SQLITE_VEC_PREFETCH(prefetch_ptr);
+        SQLITE_VEC_PREFETCH((const u8 *)prefetch_ptr + 64);
       }
-      case SQLITE_VEC_ELEMENT_TYPE_BIT: {
-        const u8 *base_i =
-            ((u8 *)baseVectors) + (i * (vector_column->dimensions / CHAR_BIT));
-        result = distance_hamming(base_i, (u8 *)queryVector,
-                                  &vector_column->dimensions);
-        break;
-      }
-      }
-
-      chunk_distances[i] = result;
+      chunk_distances[i] = distance_fn(base_i, queryVector, &vector_column->dimensions);
     }
 
+    // M1: Unified distance constraint loop with direct comparisons and
+    // byte-level bitmap processing for fast skip of empty bytes.
     if(hasDistanceConstraints) {
-      for(int i = 0; i < argc; i++) {
-        int idx = 1 + (i * 4);
+      for(int ci = 0; ci < argc; ci++) {
+        int idx = 1 + (ci * 4);
         char kind = idxStr[idx + 0];
-        // TODO casts f64 to f32, is that a problem?
-        f32 target = (f32) sqlite3_value_double(argv[i]);
-
-        if(kind != VEC0_IDXSTR_KIND_KNN_DISTANCE_CONSTRAINT)  {
+        if(kind != VEC0_IDXSTR_KIND_KNN_DISTANCE_CONSTRAINT) {
           continue;
         }
+        f32 target = (f32) sqlite3_value_double(argv[ci]);
         vec0_distance_constraint_operator op = idxStr[idx + 1];
 
-        switch(op) {
-          case VEC0_DISTANCE_CONSTRAINT_GE: {
-            for(int i = 0; i < p->chunk_size;i++) {
-              if(bitmap_get(b, i) && !(chunk_distances[i] >= target)) {
-                bitmap_set(b, i, 0);
-              }
+        i32 bitmap_bytes = p->chunk_size / CHAR_BIT;
+        for(i32 byte_idx = 0; byte_idx < bitmap_bytes; byte_idx++) {
+          u8 valid = b[byte_idx];
+          if (valid == 0) continue; // L4: skip 8 vectors at once
+          for(int bit = 0; bit < CHAR_BIT; bit++) {
+            if (!(valid & (1 << bit))) continue;
+            i32 vi = byte_idx * CHAR_BIT + bit;
+            f32 d = chunk_distances[vi];
+            int pass;
+            switch(op) {
+              case VEC0_DISTANCE_CONSTRAINT_GE: pass = (d >= target); break;
+              case VEC0_DISTANCE_CONSTRAINT_GT: pass = (d >  target); break;
+              case VEC0_DISTANCE_CONSTRAINT_LE: pass = (d <= target); break;
+              case VEC0_DISTANCE_CONSTRAINT_LT: pass = (d <  target); break;
+              default: pass = 1; break;
             }
-            break;
+            if (!pass) valid &= ~(1 << bit);
           }
-          case VEC0_DISTANCE_CONSTRAINT_GT: {
-            for(int i = 0; i < p->chunk_size;i++) {
-              if(bitmap_get(b, i) && !(chunk_distances[i] > target)) {
-                bitmap_set(b, i, 0);
-              }
-            }
-            break;
-          }
-          case VEC0_DISTANCE_CONSTRAINT_LE: {
-            for(int i = 0; i < p->chunk_size;i++) {
-              if(bitmap_get(b, i) && !(chunk_distances[i] <= target)) {
-                bitmap_set(b, i, 0);
-              }
-            }
-            break;
-          }
-          case VEC0_DISTANCE_CONSTRAINT_LT: {
-            for(int i = 0; i < p->chunk_size;i++) {
-              if(bitmap_get(b, i) && !(chunk_distances[i] < target)) {
-                bitmap_set(b, i, 0);
-              }
-            }
-            break;
-          }
+          b[byte_idx] = valid;
         }
       }
     }

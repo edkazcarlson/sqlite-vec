@@ -82,10 +82,24 @@ int vec0_parse_partition_key_definition(const char *source, int source_length,
 #ifdef SQLITE_VEC_TEST
 float _test_distance_l2_sqr_float(const float *a, const float *b, size_t dims);
 float _test_distance_cosine_float(const float *a, const float *b, size_t dims);
+float _test_distance_cosine_float_precomputed_mags(const float *a, const float *b,
+                                                    size_t dims, float aMag,
+                                                    float bMag);
+float _test_compute_magnitude_float(const float *v, size_t dims);
 float _test_distance_hamming(const unsigned char *a, const unsigned char *b, size_t dims);
 void _test_batch_distance_l2_sqr_float(const float *base, const float *query,
                                         float *distances, size_t n,
                                         size_t dims);
+void _test_batch_distance_cosine_float(const float *base, const float *query,
+                                        float *distances, size_t n,
+                                        size_t dims);
+void _test_batch_distance_l1_float(const float *base, const float *query,
+                                    float *distances, size_t n,
+                                    size_t dims);
+void _test_compute_chunk_distances_float(const float *base, const float *query,
+                                         size_t n, size_t dims, int metric,
+                                         const unsigned char *bitmap,
+                                         float *out_distances);
 #endif
 
 #endif /* SQLITE_VEC_INTERNAL_H */

@@ -1,0 +1,26 @@
+PS C:\Users\Edward\source\repos\sqlite-vec> .\scripts\bench-insert-query-msvc.ps1 -Avx
+Building with AVX2 enabled...
+Compiling benchmark...
+bench-insert-query.c
+sqlite-vec.c
+sqlite-vec.c(141): warning C4005: 'min': macro redefinition
+C:\Program Files (x86)\Windows Kits\10\include\10.0.26100.0\ucrt\stdlib.h(1283): note: see previous definition of 'min'
+sqlite3.c
+Generating Code...
+   Creating library dist\bench-insert-query.lib and object dist\bench-insert-query.exp
+
+Running benchmark...
+sqlite_version=3.45.3, vec_version=v0.1.8-alpha.1
+threads:     disabled
+PASS: row count = 100000
+PASS: KNN self-lookup rowid=1 distance=0.000000e+00
+PASS: KNN returned 10 sorted rows
+
+=== sqlite-vec benchmark ===
+Vectors:     100000 x 768 dimensions (float32, normalized)
+Queries:     10000 (k=10)
+
+Insert time:          830.26 ms
+Query time (total):261992.70 ms
+Query (per query):   26.1993 ms
+Queries/sec:              38 q/s

@@ -93,6 +93,16 @@ typedef size_t usize;
 #define COMPILER_SUPPORTS_VTAB_IN 1
 #endif
 
+// H7: Portable software prefetch.
+#if defined(__GNUC__) || defined(__clang__)
+#define SQLITE_VEC_PREFETCH(addr) __builtin_prefetch((addr), 0, 0)
+#elif defined(_MSC_VER) && (defined(_M_X64) || defined(_M_IX86))
+#include <xmmintrin.h>
+#define SQLITE_VEC_PREFETCH(addr) _mm_prefetch((const char *)(addr), _MM_HINT_T0)
+#else
+#define SQLITE_VEC_PREFETCH(addr) ((void)0)
+#endif
+
 #ifndef SQLITE_SUBTYPE
 #define SQLITE_SUBTYPE 0x000100000
 #endif
@@ -170,7 +180,9 @@ static f32 l2_sqr_float_avx(const void *pVect1v, const void *pVect2v,
 #ifdef SQLITE_VEC_ENABLE_NEON
 #include <arm_neon.h>
 
+#ifndef PORTABLE_ALIGN32
 #define PORTABLE_ALIGN32 __attribute__((aligned(32)))
+#endif
 
 // thx https://github.com/nmslib/hnswlib/pull/299/files
 static f32 l2_sqr_float_neon(const void *pVect1v, const void *pVect2v,
@@ -365,6 +377,69 @@ static double l1_f32_neon(const void *pVect1v, const void *pVect2v,
 }
 #endif
 
+// clang-format off
+
+#ifdef SQLITE_VEC_ENABLE_THREADS
+
+#ifndef SQLITE_VEC_KNN_THREADS
+#define SQLITE_VEC_KNN_THREADS 4
+#endif
+
+#ifndef SQLITE_VEC_KNN_BATCH_SIZE
+#define SQLITE_VEC_KNN_BATCH_SIZE 32
+#endif
+
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <process.h>
+
+typedef HANDLE svec_thread_t;
+typedef CRITICAL_SECTION svec_mutex_t;
+
+static int svec_thread_create(svec_thread_t *t, unsigned (__stdcall *func)(void*), void *arg) {
+  *t = (HANDLE)_beginthreadex(NULL, 0, func, arg, 0, NULL);
+  return (*t == 0) ? -1 : 0;
+}
+static int svec_thread_join(svec_thread_t t) {
+  WaitForSingleObject(t, INFINITE);
+  CloseHandle(t);
+  return 0;
+}
+static void svec_mutex_init(svec_mutex_t *m) { InitializeCriticalSection(m); }
+static void svec_mutex_destroy(svec_mutex_t *m) { DeleteCriticalSection(m); }
+static void svec_mutex_lock(svec_mutex_t *m) { EnterCriticalSection(m); }
+static void svec_mutex_unlock(svec_mutex_t *m) { LeaveCriticalSection(m); }
+
+#define SVEC_THREAD_FUNC unsigned __stdcall
+#define SVEC_THREAD_FUNC_RETURN return 0
+
+#else /* POSIX */
+#include <pthread.h>
+
+typedef pthread_t svec_thread_t;
+typedef pthread_mutex_t svec_mutex_t;
+
+static int svec_thread_create(svec_thread_t *t, void *(*func)(void*), void *arg) {
+  return pthread_create(t, NULL, func, arg);
+}
+static int svec_thread_join(svec_thread_t t) {
+  return pthread_join(t, NULL);
+}
+static void svec_mutex_init(svec_mutex_t *m) { pthread_mutex_init(m, NULL); }
+static void svec_mutex_destroy(svec_mutex_t *m) { pthread_mutex_destroy(m); }
+static void svec_mutex_lock(svec_mutex_t *m) { pthread_mutex_lock(m); }
+static void svec_mutex_unlock(svec_mutex_t *m) { pthread_mutex_unlock(m); }
+
+#define SVEC_THREAD_FUNC void *
+#define SVEC_THREAD_FUNC_RETURN return NULL
+
+#endif /* _WIN32 */
+
+#endif /* SQLITE_VEC_ENABLE_THREADS */
+
+// clang-format on
+
 static f32 l2_sqr_float(const void *pVect1v, const void *pVect2v,
                         const void *qty_ptr) {
   f32 *pVect1 = (f32 *)pVect1v;
@@ -403,7 +478,8 @@ static f32 distance_l2_sqr_float(const void *a, const void *b, const void *d) {
   }
 #endif
 #ifdef SQLITE_VEC_ENABLE_AVX
-  if (((*(const size_t *)d) % 16 == 0)) {
+  // H5: Scalar tail loop in AVX version handles any dimension count.
+  {
     return l2_sqr_float_avx(a, b, d);
   }
 #endif
@@ -579,7 +655,70 @@ f32 _test_distance_cosine_float(const f32 *a, const f32 *b, size_t dims) {
 f32 _test_distance_hamming(const u8 *a, const u8 *b, size_t dims) {
   return distance_hamming(a, b, &dims);
 }
+// Batch distance wrappers: base is SoA (column-major), query is AoS (row).
+// Computes squared L2 distance for n vectors of given dims.
+void _test_batch_distance_l2_sqr_float(const f32 *base_soa, const f32 *query,
+                                       f32 *distances, size_t n, size_t dims) {
+  for (size_t i = 0; i < n; i++) {
+    f32 sum = 0;
+    for (size_t d = 0; d < dims; d++) {
+      f32 diff = base_soa[d * n + i] - query[d];
+      sum += diff * diff;
+    }
+    distances[i] = sum;
+  }
+}
+void _test_batch_distance_cosine_float(const f32 *base_soa, const f32 *query,
+                                       f32 *distances, size_t n, size_t dims) {
+  for (size_t i = 0; i < n; i++) {
+    f32 dot = 0, normA = 0, normB = 0;
+    for (size_t d = 0; d < dims; d++) {
+      f32 a = base_soa[d * n + i];
+      f32 b = query[d];
+      dot += a * b;
+      normA += a * a;
+      normB += b * b;
+    }
+    f32 denom = sqrtf(normA) * sqrtf(normB);
+    distances[i] = (denom > 0) ? (1.0f - dot / denom) : 0.0f;
+  }
+}
+void _test_batch_distance_l1_float(const f32 *base_soa, const f32 *query,
+                                   f32 *distances, size_t n, size_t dims) {
+  for (size_t i = 0; i < n; i++) {
+    f32 sum = 0;
+    for (size_t d = 0; d < dims; d++) {
+      sum += fabsf(base_soa[d * n + i] - query[d]);
+    }
+    distances[i] = sum;
+  }
+}
 #endif
+
+/**
+ * Function pointer type for distance computation.
+ * All distance functions used in KNN hot loop must conform to this signature.
+ */
+typedef f32 (*vec0_distance_fn)(const void *, const void *, const void *);
+
+// L1 adapter functions: l1_f32/l1_int8/l1_f32_neon return non-f32 types,
+// but the KNN hot loop stores results as f32. Wrap them to match vec0_distance_fn.
+static f32 distance_l1_f32_as_f32(const void *a, const void *b, const void *d) {
+  return (f32)distance_l1_f32(a, b, d);
+}
+static f32 distance_l1_int8_as_f32(const void *a, const void *b, const void *d) {
+  return (f32)distance_l1_int8(a, b, d);
+}
+#ifdef SQLITE_VEC_ENABLE_NEON
+static f32 distance_l1_f32_neon_as_f32(const void *a, const void *b, const void *d) {
+  return (f32)l1_f32_neon(a, b, d);
+}
+static f32 distance_l1_int8_neon_as_f32(const void *a, const void *b, const void *d) {
+  return (f32)l1_int8_neon(a, b, d);
+}
+#endif
+
+// Note: resolve_distance_fn is defined later (after Vec0DistanceMetrics enum).
 
 // from SQLite source:
 // https://github.com/sqlite/sqlite/blob/a509a90958ddb234d1785ed7801880ccb18b497e/src/json.c#L153
@@ -1910,9 +2049,11 @@ int vec0_token_next(char *start, char *end, struct Vec0Token *out) {
       out->end = ptr;
       out->token_type = TOKEN_TYPE_IDENTIFIER;
       return VEC0_TOKEN_RESULT_SOME;
-    } else if (is_digit(curr)) {
+    } else if (is_digit(curr) || (curr == '.' && ptr + 1 < end && is_digit(*(ptr + 1)))) {
       char *start = ptr;
-      while (ptr < end && (is_digit(*ptr))) {
+      int seen_dot = 0;
+      while (ptr < end && (is_digit(*ptr) || (*ptr == '.' && !seen_dot))) {
+        if (*ptr == '.') seen_dot = 1;
         ptr++;
       }
       out->start = start;
@@ -2328,6 +2469,59 @@ size_t vector_byte_size(enum VectorElementType element_type,
 
 size_t vector_column_byte_size(struct VectorColumnDefinition column) {
   return vector_byte_size(column.element_type, column.dimensions);
+}
+
+/**
+ * Resolve the optimal distance function pointer for a given element type,
+ * metric, and dimension count. Called once before chunk loops to eliminate
+ * per-vector switch dispatch (H1) and select
+ * the best SIMD variant based on dimensions (H1 + M2).
+ */
+static vec0_distance_fn resolve_distance_fn(
+    enum VectorElementType element_type,
+    enum Vec0DistanceMetrics distance_metric,
+    size_t dimensions) {
+  switch (element_type) {
+  case SQLITE_VEC_ELEMENT_TYPE_FLOAT32:
+    switch (distance_metric) {
+    case VEC0_DISTANCE_METRIC_L2:
+#ifdef SQLITE_VEC_ENABLE_NEON
+      if (dimensions > 16) return (vec0_distance_fn)l2_sqr_float_neon;
+#endif
+#ifdef SQLITE_VEC_ENABLE_AVX
+      // H5: Scalar tail loop means any dimension count works with AVX now.
+      return (vec0_distance_fn)l2_sqr_float_avx;
+#endif
+      return (vec0_distance_fn)l2_sqr_float;
+    case VEC0_DISTANCE_METRIC_COSINE:
+      return (vec0_distance_fn)distance_cosine_float;
+    case VEC0_DISTANCE_METRIC_L1:
+#ifdef SQLITE_VEC_ENABLE_NEON
+      if (dimensions > 3) return distance_l1_f32_neon_as_f32;
+#endif
+      return distance_l1_f32_as_f32;
+    }
+    break;
+  case SQLITE_VEC_ELEMENT_TYPE_INT8:
+    switch (distance_metric) {
+    case VEC0_DISTANCE_METRIC_L2:
+#ifdef SQLITE_VEC_ENABLE_NEON
+      if (dimensions > 7) return (vec0_distance_fn)l2_sqr_int8_neon;
+#endif
+      return (vec0_distance_fn)l2_sqr_int8;
+    case VEC0_DISTANCE_METRIC_COSINE:
+      return (vec0_distance_fn)distance_cosine_int8;
+    case VEC0_DISTANCE_METRIC_L1:
+#ifdef SQLITE_VEC_ENABLE_NEON
+      if (dimensions > 15) return distance_l1_int8_neon_as_f32;
+#endif
+      return distance_l1_int8_as_f32;
+    }
+    break;
+  case SQLITE_VEC_ELEMENT_TYPE_BIT:
+    return (vec0_distance_fn)distance_hamming;
+  }
+  return NULL;
 }
 
 /**
@@ -6628,6 +6822,671 @@ int vec0_set_metadata_filter_bitmap(
     return rc;
 }
 
+/**
+ * @brief Compute distances between a query vector and all valid vectors in a
+ * chunk. Pure computation — no SQLite calls. Thread-safe.
+ *
+ * H1: Uses pre-resolved function pointer instead of nested switch per vector.
+ * H7: Prefetches vectors 2 ahead to hide memory latency.
+ */
+static void vec0_compute_chunk_distances(
+    const void *baseVectors, const void *queryVector,
+    const struct VectorColumnDefinition *vector_column, int chunk_size,
+    const u8 *candidateBitmap, f32 *out_distances) {
+  // H1: Resolve distance function pointer once, not per-vector.
+  vec0_distance_fn distance_fn = resolve_distance_fn(
+      vector_column->element_type,
+      vector_column->distance_metric,
+      vector_column->dimensions);
+  size_t single_vector_bytes = vector_column_byte_size(*vector_column);
+
+  for (int i = 0; i < chunk_size; i++) {
+    if (!bitmap_get((u8 *)candidateBitmap, i)) {
+      continue;
+    }
+    const void *base_i = (const u8 *)baseVectors + ((size_t)i * single_vector_bytes);
+    // H7: Prefetch 2 vectors ahead to overlap memory load with computation.
+    if (i + 2 < chunk_size) {
+      const void *prefetch_ptr = (const u8 *)baseVectors + ((size_t)(i + 2) * single_vector_bytes);
+      SQLITE_VEC_PREFETCH(prefetch_ptr);
+      SQLITE_VEC_PREFETCH((const u8 *)prefetch_ptr + 64);
+    }
+    out_distances[i] = distance_fn(base_i, queryVector, &vector_column->dimensions);
+  }
+}
+
+#ifdef SQLITE_VEC_TEST
+void _test_compute_chunk_distances_float(const f32 *base, const f32 *query,
+                                         size_t n, size_t dims, int metric,
+                                         const u8 *bitmap,
+                                         f32 *out_distances) {
+  struct VectorColumnDefinition col;
+  col.name = NULL;
+  col.name_length = 0;
+  col.dimensions = dims;
+  col.element_type = SQLITE_VEC_ELEMENT_TYPE_FLOAT32;
+  col.distance_metric = metric;
+  vec0_compute_chunk_distances(base, query, &col, n, bitmap, out_distances);
+}
+#endif
+
+#ifdef SQLITE_VEC_ENABLE_THREADS
+/**
+ * @brief Pre-extracted distance constraint (operator + value).
+ * Extracted from sqlite3_value on the main thread so workers don't touch
+ * SQLite.
+ */
+struct vec0_distance_constraint_entry {
+  vec0_distance_constraint_operator op;
+  f32 value;
+};
+
+/**
+ * @brief Apply pre-extracted distance constraints to a candidate bitmap.
+ * Pure computation — no SQLite calls. Thread-safe.
+ * M1: Unified distance constraint loop with byte-level bitmap processing (L4).
+ */
+static void vec0_apply_distance_constraints(
+    const f32 *chunk_distances, u8 *candidateBitmap, int chunk_size,
+    const struct vec0_distance_constraint_entry *constraints,
+    int num_constraints) {
+  i32 bitmap_bytes = chunk_size / CHAR_BIT;
+  for (int c = 0; c < num_constraints; c++) {
+    vec0_distance_constraint_operator op = constraints[c].op;
+    f32 target = constraints[c].value;
+    for (i32 byte_idx = 0; byte_idx < bitmap_bytes; byte_idx++) {
+      u8 valid = candidateBitmap[byte_idx];
+      if (valid == 0) continue; // L4: skip 8 vectors at once
+      for (int bit = 0; bit < CHAR_BIT; bit++) {
+        if (!(valid & (1 << bit))) continue;
+        i32 vi = byte_idx * CHAR_BIT + bit;
+        f32 d = chunk_distances[vi];
+        int pass;
+        switch(op) {
+          case VEC0_DISTANCE_CONSTRAINT_GE: pass = (d >= target); break;
+          case VEC0_DISTANCE_CONSTRAINT_GT: pass = (d >  target); break;
+          case VEC0_DISTANCE_CONSTRAINT_LE: pass = (d <= target); break;
+          case VEC0_DISTANCE_CONSTRAINT_LT: pass = (d <  target); break;
+          default: pass = 1; break;
+        }
+        if (!pass) valid &= ~(1 << bit);
+      }
+      candidateBitmap[byte_idx] = valid;
+    }
+  }
+}
+#endif /* SQLITE_VEC_ENABLE_THREADS - distance constraints */
+
+#ifdef SQLITE_VEC_ENABLE_THREADS
+
+/** Pre-read data for one chunk, ready for worker computation. */
+struct vec0_knn_chunk_work {
+  void *baseVectors;   // malloc'd copy of vector blob data
+  i64 *chunkRowids;    // malloc'd copy of rowid array
+  u8 *candidateBitmap; // pre-built bitmap (validity + rowid IN + metadata)
+  int chunk_size;
+};
+
+/** Context passed to each worker thread. */
+struct vec0_knn_worker_ctx {
+  // Read-only shared inputs
+  const void *queryVector;
+  const struct VectorColumnDefinition *vector_column;
+  int chunk_size;
+  i64 k;
+  struct vec0_distance_constraint_entry *distance_constraints;
+  int num_distance_constraints;
+
+  // Work queue (all pre-read chunks for current batch)
+  struct vec0_knn_chunk_work *chunks;
+  int num_chunks;
+  svec_mutex_t *work_mutex;
+  int *next_chunk_idx;
+
+  // Per-worker output
+  i64 *local_topk_rowids;
+  f32 *local_topk_distances;
+  i64 local_k_used;
+  int rc;
+};
+
+/**
+ * @brief Merge two pre-sorted (distance, rowid) arrays into an output array of
+ * length out_length. Both a and b are directly indexed (no indirection array).
+ */
+static void merge_sorted_direct(const f32 *a_dist, const i64 *a_rowids,
+                                i64 a_length, const f32 *b_dist,
+                                const i64 *b_rowids, i64 b_length, f32 *out,
+                                i64 *out_rowids, i64 out_length,
+                                i64 *out_used) {
+  i64 ptrA = 0;
+  i64 ptrB = 0;
+  for (i64 i = 0; i < out_length; i++) {
+    if ((ptrA >= a_length) && (ptrB >= b_length)) {
+      *out_used = i;
+      return;
+    }
+    if (ptrA >= a_length) {
+      out[i] = b_dist[ptrB];
+      out_rowids[i] = b_rowids[ptrB];
+      ptrB++;
+    } else if (ptrB >= b_length) {
+      out[i] = a_dist[ptrA];
+      out_rowids[i] = a_rowids[ptrA];
+      ptrA++;
+    } else {
+      if (a_dist[ptrA] <= b_dist[ptrB]) {
+        out[i] = a_dist[ptrA];
+        out_rowids[i] = a_rowids[ptrA];
+        ptrA++;
+      } else {
+        out[i] = b_dist[ptrB];
+        out_rowids[i] = b_rowids[ptrB];
+        ptrB++;
+      }
+    }
+  }
+  *out_used = out_length;
+}
+
+static SVEC_THREAD_FUNC vec0_knn_worker(void *arg) {
+  struct vec0_knn_worker_ctx *ctx = (struct vec0_knn_worker_ctx *)arg;
+
+  f32 *chunk_distances = NULL;
+  i32 *chunk_topk_idxs = NULL;
+  u8 *bTaken = NULL;
+  i64 *tmp_topk_rowids = NULL;
+  f32 *tmp_topk_distances = NULL;
+
+  chunk_distances = sqlite3_malloc(ctx->chunk_size * sizeof(f32));
+  chunk_topk_idxs = sqlite3_malloc(ctx->k * sizeof(i32));
+  bTaken = bitmap_new(ctx->chunk_size);
+  tmp_topk_rowids = sqlite3_malloc(ctx->k * sizeof(i64));
+  tmp_topk_distances = sqlite3_malloc(ctx->k * sizeof(f32));
+
+  if (!chunk_distances || !chunk_topk_idxs || !bTaken || !tmp_topk_rowids ||
+      !tmp_topk_distances) {
+    ctx->rc = SQLITE_NOMEM;
+    goto cleanup;
+  }
+
+  ctx->local_k_used = 0;
+  memset(ctx->local_topk_rowids, 0, ctx->k * sizeof(i64));
+  memset(ctx->local_topk_distances, 0, ctx->k * sizeof(f32));
+
+  while (1) {
+    int my_chunk;
+#ifdef _WIN32
+    my_chunk = (int)InterlockedIncrement((volatile LONG *)ctx->next_chunk_idx) - 1;
+#elif defined(__GNUC__) || defined(__clang__)
+    my_chunk = __sync_fetch_and_add(ctx->next_chunk_idx, 1);
+#else
+    svec_mutex_lock(ctx->work_mutex);
+    my_chunk = (*ctx->next_chunk_idx)++;
+    svec_mutex_unlock(ctx->work_mutex);
+#endif
+
+    if (my_chunk >= ctx->num_chunks)
+      break;
+
+    struct vec0_knn_chunk_work *work = &ctx->chunks[my_chunk];
+
+    memset(chunk_distances, 0, ctx->chunk_size * sizeof(f32));
+    memset(chunk_topk_idxs, 0, ctx->k * sizeof(i32));
+
+    // 1. Compute distances
+    vec0_compute_chunk_distances(work->baseVectors, ctx->queryVector,
+                                ctx->vector_column, work->chunk_size,
+                                work->candidateBitmap, chunk_distances);
+
+    // 2. Apply distance constraints
+    if (ctx->num_distance_constraints > 0) {
+      vec0_apply_distance_constraints(chunk_distances, work->candidateBitmap,
+                                      work->chunk_size,
+                                      ctx->distance_constraints,
+                                      ctx->num_distance_constraints);
+    }
+
+    // 3. Extract chunk's top-k
+    i32 used1;
+    min_idx(chunk_distances, work->chunk_size, work->candidateBitmap,
+            chunk_topk_idxs,
+            (i32)(ctx->k < work->chunk_size ? ctx->k : work->chunk_size),
+            bTaken, &used1);
+
+    // 4. Merge with worker's local running top-k
+    i64 used;
+    i64 b_length =
+        ctx->k < work->chunk_size ? ctx->k : work->chunk_size;
+    if (used1 < b_length)
+      b_length = used1;
+    merge_sorted_lists(ctx->local_topk_distances, ctx->local_topk_rowids,
+                       ctx->local_k_used, chunk_distances, work->chunkRowids,
+                       chunk_topk_idxs, b_length, tmp_topk_distances,
+                       tmp_topk_rowids, ctx->k, &used);
+
+    memcpy(ctx->local_topk_rowids, tmp_topk_rowids, used * sizeof(i64));
+    memcpy(ctx->local_topk_distances, tmp_topk_distances, used * sizeof(f32));
+    ctx->local_k_used = used;
+  }
+
+  ctx->rc = SQLITE_OK;
+
+cleanup:
+  sqlite3_free(chunk_distances);
+  sqlite3_free(chunk_topk_idxs);
+  sqlite3_free(bTaken);
+  sqlite3_free(tmp_topk_rowids);
+  sqlite3_free(tmp_topk_distances);
+  SVEC_THREAD_FUNC_RETURN;
+}
+
+/**
+ * @brief Multithreaded variant of vec0Filter_knn_chunks_iter.
+ * Main thread pre-reads chunks from SQLite, worker threads compute distances.
+ */
+static int vec0Filter_knn_chunks_iter_mt(
+    vec0_vtab *p, sqlite3_stmt *stmtChunks,
+    struct VectorColumnDefinition *vector_column, int vectorColumnIdx,
+    struct Array *arrayRowidsIn, struct Array *aMetadataIn,
+    const char *idxStr, int argc, sqlite3_value **argv, void *queryVector,
+    i64 k, i64 **out_topk_rowids, f32 **out_topk_distances, i64 *out_used) {
+
+  int rc = SQLITE_OK;
+  sqlite3_blob *blobVectors = NULL;
+
+  // Global top-k (owned by caller on success)
+  i64 *topk_rowids = NULL;
+  f32 *topk_distances = NULL;
+  i64 k_used = 0;
+
+  // Temporaries for global merge
+  i64 *tmp_topk_rowids = NULL;
+  f32 *tmp_topk_distances = NULL;
+
+  // Pre-extracted distance constraints
+  struct vec0_distance_constraint_entry *distance_constraints = NULL;
+  int num_distance_constraints = 0;
+
+  // Batch of pre-read chunks
+  struct vec0_knn_chunk_work *batch = NULL;
+
+  // Worker contexts and threads
+  struct vec0_knn_worker_ctx *workers = NULL;
+  svec_thread_t *threads = NULL;
+
+  // Metadata blob handles
+  sqlite3_blob *metadataBlobs[VEC0_MAX_METADATA_COLUMNS];
+  memset(metadataBlobs, 0, sizeof(sqlite3_blob *) * VEC0_MAX_METADATA_COLUMNS);
+
+  // Bitmaps for main-thread chunk pre-processing
+  u8 *b = NULL;
+  u8 *bmRowids = NULL;
+  u8 *bmMetadata = NULL;
+
+  int num_threads = SQLITE_VEC_KNN_THREADS;
+
+  // Allocate global top-k
+  topk_rowids = sqlite3_malloc(k * sizeof(i64));
+  topk_distances = sqlite3_malloc(k * sizeof(f32));
+  tmp_topk_rowids = sqlite3_malloc(k * sizeof(i64));
+  tmp_topk_distances = sqlite3_malloc(k * sizeof(f32));
+  if (!topk_rowids || !topk_distances || !tmp_topk_rowids ||
+      !tmp_topk_distances) {
+    rc = SQLITE_NOMEM;
+    goto cleanup;
+  }
+  memset(topk_rowids, 0, k * sizeof(i64));
+  memset(topk_distances, 0, k * sizeof(f32));
+
+  // Allocate bitmaps
+  b = bitmap_new(p->chunk_size);
+  bmRowids = arrayRowidsIn ? bitmap_new(p->chunk_size) : NULL;
+  bmMetadata = bitmap_new(p->chunk_size);
+  if (!b || !bmMetadata || (arrayRowidsIn && !bmRowids)) {
+    rc = SQLITE_NOMEM;
+    goto cleanup;
+  }
+
+  // Pre-extract distance constraints from argv
+  {
+    int idxStrLength = strlen(idxStr);
+    int numValueEntries = (idxStrLength - 1) / 4;
+    (void)numValueEntries;
+    assert(numValueEntries == argc);
+
+    // Count distance constraints
+    for (int i = 0; i < argc; i++) {
+      int idx = 1 + (i * 4);
+      if (idxStr[idx + 0] == VEC0_IDXSTR_KIND_KNN_DISTANCE_CONSTRAINT) {
+        num_distance_constraints++;
+      }
+    }
+    if (num_distance_constraints > 0) {
+      distance_constraints = sqlite3_malloc(num_distance_constraints *
+                                            sizeof(*distance_constraints));
+      if (!distance_constraints) {
+        rc = SQLITE_NOMEM;
+        goto cleanup;
+      }
+      int dc_idx = 0;
+      for (int i = 0; i < argc; i++) {
+        int idx = 1 + (i * 4);
+        if (idxStr[idx + 0] == VEC0_IDXSTR_KIND_KNN_DISTANCE_CONSTRAINT) {
+          distance_constraints[dc_idx].op = idxStr[idx + 1];
+          distance_constraints[dc_idx].value =
+              (f32)sqlite3_value_double(argv[i]);
+          dc_idx++;
+        }
+      }
+    }
+  }
+
+  // Detect metadata filters
+  int hasMetadataFilters = 0;
+  {
+    for (int i = 0; i < argc; i++) {
+      int idx = 1 + (i * 4);
+      if (idxStr[idx + 0] == VEC0_IDXSTR_KIND_METADATA_CONSTRAINT) {
+        hasMetadataFilters = 1;
+        break;
+      }
+    }
+  }
+
+  // Allocate batch and workers
+  batch = sqlite3_malloc(SQLITE_VEC_KNN_BATCH_SIZE * sizeof(*batch));
+  workers = sqlite3_malloc(num_threads * sizeof(*workers));
+  threads = sqlite3_malloc(num_threads * sizeof(*threads));
+  if (!batch || !workers || !threads) {
+    rc = SQLITE_NOMEM;
+    goto cleanup;
+  }
+  memset(batch, 0, SQLITE_VEC_KNN_BATCH_SIZE * sizeof(*batch));
+
+  // Allocate per-worker output buffers
+  for (int w = 0; w < num_threads; w++) {
+    workers[w].local_topk_rowids = sqlite3_malloc(k * sizeof(i64));
+    workers[w].local_topk_distances = sqlite3_malloc(k * sizeof(f32));
+    if (!workers[w].local_topk_rowids || !workers[w].local_topk_distances) {
+      rc = SQLITE_NOMEM;
+      goto cleanup;
+    }
+  }
+
+  // Batch loop: read chunks, dispatch to workers, merge results
+  while (1) {
+    int batch_count = 0;
+
+    // Phase A: Main thread pre-reads up to SQLITE_VEC_KNN_BATCH_SIZE chunks
+    while (batch_count < SQLITE_VEC_KNN_BATCH_SIZE) {
+      rc = sqlite3_step(stmtChunks);
+      if (rc == SQLITE_DONE) {
+        break;
+      }
+      if (rc != SQLITE_ROW) {
+        vtab_set_error(&p->base, "chunks iter error");
+        rc = SQLITE_ERROR;
+        goto cleanup_batch;
+      }
+
+      i64 chunk_id = sqlite3_column_int64(stmtChunks, 0);
+      unsigned char *chunkValidity =
+          (unsigned char *)sqlite3_column_blob(stmtChunks, 1);
+      i64 validitySize = sqlite3_column_bytes(stmtChunks, 1);
+      if (validitySize != p->chunk_size / CHAR_BIT) {
+        vtab_set_error(
+            &p->base,
+            "chunk validity size doesn't match - expected %lld, found %lld",
+            (i64)(p->chunk_size / CHAR_BIT), validitySize);
+        rc = SQLITE_ERROR;
+        goto cleanup_batch;
+      }
+
+      i64 *chunkRowids = (i64 *)sqlite3_column_blob(stmtChunks, 2);
+      i64 rowidsSize = sqlite3_column_bytes(stmtChunks, 2);
+      if (rowidsSize != p->chunk_size * (i64)sizeof(i64)) {
+        vtab_set_error(
+            &p->base,
+            "chunk rowids size doesn't match - expected %lld, found %lld",
+            (i64)(p->chunk_size * sizeof(i64)), rowidsSize);
+        rc = SQLITE_ERROR;
+        goto cleanup_batch;
+      }
+
+      // Read vector blob data
+      rc = sqlite3_blob_open(p->db, p->schemaName,
+                             p->shadowVectorChunksNames[vectorColumnIdx],
+                             "vectors", chunk_id, 0, &blobVectors);
+      if (rc != SQLITE_OK) {
+        vtab_set_error(&p->base,
+                       "could not open vectors blob for chunk %lld", chunk_id);
+        rc = SQLITE_ERROR;
+        goto cleanup_batch;
+      }
+
+      i64 currentBaseVectorsSize = sqlite3_blob_bytes(blobVectors);
+      i64 expectedBaseVectorsSize =
+          p->chunk_size * vector_column_byte_size(*vector_column);
+      if (currentBaseVectorsSize != expectedBaseVectorsSize) {
+        vtab_set_error(
+            &p->base,
+            "vectors blob size doesn't match - expected %lld, found %lld",
+            expectedBaseVectorsSize, currentBaseVectorsSize);
+        rc = SQLITE_ERROR;
+        sqlite3_blob_close(blobVectors);
+        blobVectors = NULL;
+        goto cleanup_batch;
+      }
+
+      void *bv = sqlite3_malloc(currentBaseVectorsSize);
+      if (!bv) {
+        rc = SQLITE_NOMEM;
+        sqlite3_blob_close(blobVectors);
+        blobVectors = NULL;
+        goto cleanup_batch;
+      }
+      rc = sqlite3_blob_read(blobVectors, bv, currentBaseVectorsSize, 0);
+      sqlite3_blob_close(blobVectors);
+      blobVectors = NULL;
+      if (rc != SQLITE_OK) {
+        vtab_set_error(&p->base, "vectors blob read error for %lld", chunk_id);
+        sqlite3_free(bv);
+        goto cleanup_batch;
+      }
+
+      // Build candidate bitmap
+      bitmap_copy(b, chunkValidity, p->chunk_size);
+      if (arrayRowidsIn) {
+        bitmap_clear(bmRowids, p->chunk_size);
+        for (int i = 0; i < p->chunk_size; i++) {
+          if (!bitmap_get(chunkValidity, i))
+            continue;
+          i64 rowid = chunkRowids[i];
+          void *in = bsearch(&rowid, arrayRowidsIn->z, arrayRowidsIn->length,
+                             sizeof(i64), _cmp);
+          bitmap_set(bmRowids, i, in ? 1 : 0);
+        }
+        bitmap_and_inplace(b, bmRowids, p->chunk_size);
+      }
+
+      if (hasMetadataFilters) {
+        for (int i = 0; i < argc; i++) {
+          int idx = 1 + (i * 4);
+          char kind = idxStr[idx + 0];
+          if (kind != VEC0_IDXSTR_KIND_METADATA_CONSTRAINT)
+            continue;
+          int metadata_idx = idxStr[idx + 1] - 'A';
+          int op = idxStr[idx + 2];
+
+          if (!metadataBlobs[metadata_idx]) {
+            rc = sqlite3_blob_open(
+                p->db, p->schemaName,
+                p->shadowMetadataChunksNames[metadata_idx], "data", chunk_id,
+                0, &metadataBlobs[metadata_idx]);
+            vtab_set_error(&p->base, "Could not open metadata blob");
+            if (rc != SQLITE_OK) {
+              sqlite3_free(bv);
+              goto cleanup_batch;
+            }
+          }
+
+          bitmap_clear(bmMetadata, p->chunk_size);
+          rc = vec0_set_metadata_filter_bitmap(
+              p, metadata_idx, op, argv[i], metadataBlobs[metadata_idx],
+              chunk_id, bmMetadata, p->chunk_size, aMetadataIn, i);
+          if (rc != SQLITE_OK) {
+            vtab_set_error(&p->base, "Could not filter metadata fields");
+            sqlite3_free(bv);
+            goto cleanup_batch;
+          }
+          bitmap_and_inplace(b, bmMetadata, p->chunk_size);
+        }
+      }
+
+      // Copy rowids
+      i64 *rowids_copy = sqlite3_malloc(p->chunk_size * sizeof(i64));
+      u8 *bitmap_copy_buf = sqlite3_malloc(p->chunk_size / CHAR_BIT);
+      if (!rowids_copy || !bitmap_copy_buf) {
+        sqlite3_free(bv);
+        sqlite3_free(rowids_copy);
+        sqlite3_free(bitmap_copy_buf);
+        rc = SQLITE_NOMEM;
+        goto cleanup_batch;
+      }
+      memcpy(rowids_copy, chunkRowids, p->chunk_size * sizeof(i64));
+      memcpy(bitmap_copy_buf, b, p->chunk_size / CHAR_BIT);
+
+      batch[batch_count].baseVectors = bv;
+      batch[batch_count].chunkRowids = rowids_copy;
+      batch[batch_count].candidateBitmap = bitmap_copy_buf;
+      batch[batch_count].chunk_size = p->chunk_size;
+      batch_count++;
+    }
+
+    if (batch_count == 0)
+      break;
+
+    // Phase B: Create workers and dispatch
+    int actual_threads =
+        num_threads < batch_count ? num_threads : batch_count;
+    svec_mutex_t work_mutex;
+    int next_chunk_idx = 0;
+    svec_mutex_init(&work_mutex);
+
+    for (int w = 0; w < actual_threads; w++) {
+      workers[w].queryVector = queryVector;
+      workers[w].vector_column = vector_column;
+      workers[w].chunk_size = p->chunk_size;
+      workers[w].k = k;
+      workers[w].distance_constraints = distance_constraints;
+      workers[w].num_distance_constraints = num_distance_constraints;
+      workers[w].chunks = batch;
+      workers[w].num_chunks = batch_count;
+      workers[w].work_mutex = &work_mutex;
+      workers[w].next_chunk_idx = &next_chunk_idx;
+      workers[w].rc = SQLITE_OK;
+      workers[w].local_k_used = 0;
+
+      int trc = svec_thread_create(&threads[w], vec0_knn_worker, &workers[w]);
+      if (trc != 0) {
+        // If thread creation fails, set remaining to completed
+        for (int j = w; j < actual_threads; j++) {
+          workers[j].rc = SQLITE_ERROR;
+          workers[j].local_k_used = 0;
+        }
+        actual_threads = w;
+        break;
+      }
+    }
+
+    // Phase C: Join all workers
+    for (int w = 0; w < actual_threads; w++) {
+      svec_thread_join(threads[w]);
+    }
+    svec_mutex_destroy(&work_mutex);
+
+    // Check for worker errors
+    for (int w = 0; w < actual_threads; w++) {
+      if (workers[w].rc != SQLITE_OK) {
+        rc = workers[w].rc;
+        goto cleanup_batch;
+      }
+    }
+
+    // Phase D: Merge all workers' local top-k with global top-k
+    for (int w = 0; w < actual_threads; w++) {
+      if (workers[w].local_k_used == 0)
+        continue;
+      i64 used;
+      merge_sorted_direct(topk_distances, topk_rowids, k_used,
+                          workers[w].local_topk_distances,
+                          workers[w].local_topk_rowids, workers[w].local_k_used,
+                          tmp_topk_distances, tmp_topk_rowids, k, &used);
+      memcpy(topk_rowids, tmp_topk_rowids, used * sizeof(i64));
+      memcpy(topk_distances, tmp_topk_distances, used * sizeof(f32));
+      k_used = used;
+    }
+
+    // Free batch chunk data
+    for (int i = 0; i < batch_count; i++) {
+      sqlite3_free(batch[i].baseVectors);
+      sqlite3_free(batch[i].chunkRowids);
+      sqlite3_free(batch[i].candidateBitmap);
+      batch[i].baseVectors = NULL;
+      batch[i].chunkRowids = NULL;
+      batch[i].candidateBitmap = NULL;
+    }
+
+    // If sqlite3_step returned DONE during batch fill, we're done
+    if (batch_count < SQLITE_VEC_KNN_BATCH_SIZE)
+      break;
+  }
+
+  *out_topk_rowids = topk_rowids;
+  *out_topk_distances = topk_distances;
+  *out_used = k_used;
+  rc = SQLITE_OK;
+  goto cleanup;
+
+cleanup_batch:
+  // Free any allocated batch data on error
+  if (batch) {
+    for (int i = 0; i < SQLITE_VEC_KNN_BATCH_SIZE; i++) {
+      sqlite3_free(batch[i].baseVectors);
+      sqlite3_free(batch[i].chunkRowids);
+      sqlite3_free(batch[i].candidateBitmap);
+    }
+  }
+
+cleanup:
+  if (rc != SQLITE_OK) {
+    sqlite3_free(topk_rowids);
+    sqlite3_free(topk_distances);
+  }
+  sqlite3_free(tmp_topk_rowids);
+  sqlite3_free(tmp_topk_distances);
+  sqlite3_free(distance_constraints);
+  sqlite3_free(b);
+  sqlite3_free(bmRowids);
+  sqlite3_free(bmMetadata);
+  sqlite3_free(batch);
+  if (workers) {
+    for (int w = 0; w < num_threads; w++) {
+      sqlite3_free(workers[w].local_topk_rowids);
+      sqlite3_free(workers[w].local_topk_distances);
+    }
+  }
+  sqlite3_free(workers);
+  sqlite3_free(threads);
+  for (int i = 0; i < VEC0_MAX_METADATA_COLUMNS; i++) {
+    sqlite3_blob_close(metadataBlobs[i]);
+  }
+  sqlite3_blob_close(blobVectors);
+  return rc;
+}
+#endif /* SQLITE_VEC_ENABLE_THREADS */
+
 int vec0Filter_knn_chunks_iter(vec0_vtab *p, sqlite3_stmt *stmtChunks,
                                struct VectorColumnDefinition *vector_column,
                                int vectorColumnIdx, struct Array *arrayRowidsIn,
@@ -6638,6 +7497,16 @@ int vec0Filter_knn_chunks_iter(vec0_vtab *p, sqlite3_stmt *stmtChunks,
   // for each chunk, get top min(k, chunk_size) rowid + distances to query vec.
   // then reconcile all topk_chunks for a true top k.
   // output only rowids + distances for now
+
+#ifdef SQLITE_VEC_ENABLE_THREADS
+  if (SQLITE_VEC_KNN_THREADS > 1) {
+    return vec0Filter_knn_chunks_iter_mt(p, stmtChunks, vector_column,
+                                         vectorColumnIdx, arrayRowidsIn,
+                                         aMetadataIn, idxStr, argc, argv,
+                                         queryVector, k, out_topk_rowids,
+                                         out_topk_distances, out_used);
+  }
+#endif
 
   int rc = SQLITE_OK;
   sqlite3_blob *blobVectors = NULL;
@@ -6871,69 +7740,8 @@ int vec0Filter_knn_chunks_iter(vec0_vtab *p, sqlite3_stmt *stmtChunks,
     }
 
 
-    for (int i = 0; i < p->chunk_size; i++) {
-      if (!bitmap_get(b, i)) {
-        continue;
-      };
-
-      f32 result;
-      switch (vector_column->element_type) {
-      case SQLITE_VEC_ELEMENT_TYPE_FLOAT32: {
-        const f32 *base_i =
-            ((f32 *)baseVectors) + (i * vector_column->dimensions);
-        switch (vector_column->distance_metric) {
-        case VEC0_DISTANCE_METRIC_L2: {
-          result = distance_l2_sqr_float(base_i, (f32 *)queryVector,
-                                         &vector_column->dimensions);
-          break;
-        }
-        case VEC0_DISTANCE_METRIC_L1: {
-          result = distance_l1_f32(base_i, (f32 *)queryVector,
-                                   &vector_column->dimensions);
-          break;
-        }
-        case VEC0_DISTANCE_METRIC_COSINE: {
-          result = distance_cosine_float(base_i, (f32 *)queryVector,
-                                         &vector_column->dimensions);
-          break;
-        }
-        }
-        break;
-      }
-      case SQLITE_VEC_ELEMENT_TYPE_INT8: {
-        const i8 *base_i =
-            ((i8 *)baseVectors) + (i * vector_column->dimensions);
-        switch (vector_column->distance_metric) {
-        case VEC0_DISTANCE_METRIC_L2: {
-          result = distance_l2_sqr_int8(base_i, (i8 *)queryVector,
-                                        &vector_column->dimensions);
-          break;
-        }
-        case VEC0_DISTANCE_METRIC_L1: {
-          result = distance_l1_int8(base_i, (i8 *)queryVector,
-                                    &vector_column->dimensions);
-          break;
-        }
-        case VEC0_DISTANCE_METRIC_COSINE: {
-          result = distance_cosine_int8(base_i, (i8 *)queryVector,
-                                        &vector_column->dimensions);
-          break;
-        }
-        }
-
-        break;
-      }
-      case SQLITE_VEC_ELEMENT_TYPE_BIT: {
-        const u8 *base_i =
-            ((u8 *)baseVectors) + (i * (vector_column->dimensions / CHAR_BIT));
-        result = distance_hamming(base_i, (u8 *)queryVector,
-                                  &vector_column->dimensions);
-        break;
-      }
-      }
-
-      chunk_distances[i] = result;
-    }
+    vec0_compute_chunk_distances(baseVectors, queryVector, vector_column,
+                                 p->chunk_size, b, chunk_distances);
 
     if(hasDistanceConstraints) {
       for(int i = 0; i < argc; i++) {
@@ -10052,9 +10860,15 @@ static sqlite3_module vec_static_blob_entriesModule = {
 #else
 #define SQLITE_VEC_DEBUG_BUILD_NEON ""
 #endif
+#ifdef SQLITE_VEC_ENABLE_THREADS
+#define SQLITE_VEC_DEBUG_BUILD_THREADS "threads"
+#else
+#define SQLITE_VEC_DEBUG_BUILD_THREADS ""
+#endif
 
 #define SQLITE_VEC_DEBUG_BUILD                                                 \
-  SQLITE_VEC_DEBUG_BUILD_AVX " " SQLITE_VEC_DEBUG_BUILD_NEON
+  SQLITE_VEC_DEBUG_BUILD_AVX " " SQLITE_VEC_DEBUG_BUILD_NEON " "              \
+  SQLITE_VEC_DEBUG_BUILD_THREADS
 
 #define SQLITE_VEC_DEBUG_STRING                                                \
   "Version: " SQLITE_VEC_VERSION "\n"                                          \

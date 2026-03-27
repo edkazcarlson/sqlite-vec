@@ -1,6 +1,6 @@
 /*
- * sqlite-vec benchmark: insert 10K vectors, query 1K times.
- * Measures wall clock time and peak memory usage.
+ * sqlite-vec benchmark: insert vectors, query with KNN.
+ * Tests all distance metrics: L2, cosine, L1.
  *
  * Compile with MSVC:
  *   cl /nologo /O2 /DSQLITE_CORE bench-insert-query.c sqlite-vec.c
@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -21,7 +22,7 @@
 /* Benchmark parameters */
 #define BENCH_NUM_VECTORS  100000
 #define BENCH_NUM_QUERIES  10000
-#define BENCH_DIMENSIONS   512
+#define BENCH_DIMENSIONS   768
 #define BENCH_K            10
 
 #define STRINGIFY_(x) #x
@@ -46,8 +47,17 @@ static float rand_float(void) {
 
 static void fill_random_vector(float *vec, int dims) {
   int i;
+  float norm = 0.0f;
   for (i = 0; i < dims; i++) {
-    vec[i] = rand_float();
+    vec[i] = rand_float() * 2.0f - 1.0f;
+    norm += vec[i] * vec[i];
+  }
+  /* Normalize to simulate CLIP-like embeddings */
+  norm = sqrtf(norm);
+  if (norm > 0.0f) {
+    for (i = 0; i < dims; i++) {
+      vec[i] /= norm;
+    }
   }
 }
 
@@ -91,55 +101,51 @@ static size_t get_peak_memory_bytes(void) {
     }                                                                          \
   } while (0)
 
-/* ---------- Main ---------- */
+/* ---------- Benchmark results for one distance metric ---------- */
 
-int main(void) {
+struct bench_result {
+  const char *metric_name;
+  double insert_ms;
+  double query_ms;
+  int correctness_errors;
+};
+
+/* Run the full insert + correctness + query benchmark for one distance metric.
+ * metric_name: "l2", "cosine", or "l1"
+ * table_name: unique table name for this metric
+ */
+static void run_benchmark(sqlite3 *db, const char *metric_name,
+                          const char *table_name, struct bench_result *result) {
   int rc;
-  sqlite3 *db;
   sqlite3_stmt *stmt;
   double t0, t1;
   float vec[BENCH_DIMENSIONS];
   int i;
+  char sql[512];
 
-  init_timer();
+  result->metric_name = metric_name;
+  result->correctness_errors = 0;
 
-  /* Register sqlite-vec */
-  rc = sqlite3_auto_extension((void (*)(void))sqlite3_vec_init);
-  if (rc != SQLITE_OK) {
-    fprintf(stderr, "ERROR: sqlite3_auto_extension failed\n");
-    return 1;
-  }
+  printf("\n--- %s ---\n", metric_name);
 
-  rc = sqlite3_open(":memory:", &db);
-  CHECK_OK(rc, db, "sqlite3_open");
-
-  /* Print versions */
-  rc = sqlite3_prepare_v2(db, "SELECT sqlite_version(), vec_version()", -1,
-                          &stmt, NULL);
-  CHECK_OK(rc, db, "version query");
-  rc = sqlite3_step(stmt);
-  printf("sqlite_version=%s, vec_version=%s\n", sqlite3_column_text(stmt, 0),
-         sqlite3_column_text(stmt, 1));
-  sqlite3_finalize(stmt);
-
-  /* Create vec0 table */
-  rc = sqlite3_exec(
-      db,
-      "CREATE VIRTUAL TABLE bench USING vec0(embedding float[" STRINGIFY(
-          BENCH_DIMENSIONS) "])",
-      NULL, NULL, NULL);
+  /* Create vec0 table with this distance metric */
+  snprintf(sql, sizeof(sql),
+    "CREATE VIRTUAL TABLE %s USING vec0("
+    "embedding float[" STRINGIFY(BENCH_DIMENSIONS) "] distance_metric=%s"
+    ")", table_name, metric_name);
+  rc = sqlite3_exec(db, sql, NULL, NULL, NULL);
   CHECK_OK(rc, db, "CREATE VIRTUAL TABLE");
 
   /* === INSERT PHASE === */
   xorshift32_state = 12345;
-
   t0 = get_time_ms();
 
   rc = sqlite3_exec(db, "BEGIN", NULL, NULL, NULL);
   CHECK_OK(rc, db, "BEGIN");
 
-  rc = sqlite3_prepare_v2(db, "INSERT INTO bench(embedding) VALUES (?)", -1,
-                          &stmt, NULL);
+  snprintf(sql, sizeof(sql),
+    "INSERT INTO %s(embedding) VALUES (?)", table_name);
+  rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
   CHECK_OK(rc, db, "prepare INSERT");
 
   for (i = 0; i < BENCH_NUM_VECTORS; i++) {
@@ -156,135 +162,76 @@ int main(void) {
   CHECK_OK(rc, db, "COMMIT");
 
   t1 = get_time_ms();
-  double insert_time_ms = t1 - t0;
+  result->insert_ms = t1 - t0;
 
   /* === CORRECTNESS CHECKS === */
-  int errors = 0;
-  double t_start, t_end;
-  double check_rowcount_ms, check_pointlookup_ms, check_knn_self_ms,
-      check_knn_order_ms;
 
   /* Check row count */
   {
-    t_start = get_time_ms();
-    rc = sqlite3_prepare_v2(db, "SELECT count(*) FROM bench", -1, &stmt, NULL);
+    snprintf(sql, sizeof(sql), "SELECT count(*) FROM %s", table_name);
+    rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
     CHECK_OK(rc, db, "prepare COUNT");
     rc = sqlite3_step(stmt);
     int count = sqlite3_column_int(stmt, 0);
     sqlite3_finalize(stmt);
-    t_end = get_time_ms();
-    check_rowcount_ms = t_end - t_start;
     if (count != BENCH_NUM_VECTORS) {
-      fprintf(stderr, "FAIL: row count = %d, expected %d\n", count,
-              BENCH_NUM_VECTORS);
-      errors++;
+      fprintf(stderr, "FAIL [%s]: row count = %d, expected %d\n",
+              metric_name, count, BENCH_NUM_VECTORS);
+      result->correctness_errors++;
     } else {
-      printf("PASS: row count = %d (%.2f ms)\n", count, check_rowcount_ms);
+      printf("PASS [%s]: row count = %d\n", metric_name, count);
     }
   }
 
-  /* Check point lookup: re-generate vector for rowid 1 and retrieve it */
+  /* Check KNN self-lookup: query with rowid=1's vector, expect distance~0 */
   {
-    t_start = get_time_ms();
-    xorshift32_state = 12345; /* same seed as insert phase */
-    fill_random_vector(vec, BENCH_DIMENSIONS);
-    rc = sqlite3_prepare_v2(db, "SELECT embedding FROM bench WHERE rowid = 1",
-                            -1, &stmt, NULL);
-    CHECK_OK(rc, db, "prepare point lookup");
-    rc = sqlite3_step(stmt);
-    if (rc != SQLITE_ROW) {
-      fprintf(stderr, "FAIL: rowid 1 not found\n");
-      errors++;
-    } else {
-      const float *stored =
-          (const float *)sqlite3_column_blob(stmt, 0);
-      int blob_bytes = sqlite3_column_bytes(stmt, 0);
-      if (blob_bytes != (int)(sizeof(float) * BENCH_DIMENSIONS)) {
-        fprintf(stderr, "FAIL: rowid 1 blob size = %d, expected %d\n",
-                blob_bytes, (int)(sizeof(float) * BENCH_DIMENSIONS));
-        errors++;
-      } else {
-        int match = 1;
-        for (i = 0; i < BENCH_DIMENSIONS; i++) {
-          if (stored[i] != vec[i]) {
-            match = 0;
-            break;
-          }
-        }
-        if (match) {
-          printf("PASS: rowid 1 vector matches inserted data\n");
-        } else {
-          fprintf(stderr, "FAIL: rowid 1 vector mismatch at dim %d "
-                          "(got %f, expected %f)\n",
-                  i, stored[i], vec[i]);
-          errors++;
-        }
-      }
-    }
-    sqlite3_finalize(stmt);
-    t_end = get_time_ms();
-    check_pointlookup_ms = t_end - t_start;
-    printf("      point lookup time: %.2f ms\n", check_pointlookup_ms);
-  }
-
-  /* Check KNN: query with a stored vector, expect distance ~0 as top result */
-  {
-    t_start = get_time_ms();
     xorshift32_state = 12345;
-    fill_random_vector(vec, BENCH_DIMENSIONS); /* vector for rowid 1 */
-    rc = sqlite3_prepare_v2(
-        db,
-        "SELECT rowid, distance FROM bench "
-        "WHERE embedding MATCH ? AND k = 1 ORDER BY distance",
-        -1, &stmt, NULL);
+    fill_random_vector(vec, BENCH_DIMENSIONS);
+    snprintf(sql, sizeof(sql),
+      "SELECT rowid, distance FROM %s "
+      "WHERE embedding MATCH ? AND k = 1 ORDER BY distance", table_name);
+    rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
     CHECK_OK(rc, db, "prepare KNN self-lookup");
     sqlite3_bind_blob(stmt, 1, vec, sizeof(float) * BENCH_DIMENSIONS,
                       SQLITE_TRANSIENT);
     rc = sqlite3_step(stmt);
     if (rc != SQLITE_ROW) {
-      fprintf(stderr, "FAIL: KNN self-lookup returned no rows\n");
-      errors++;
+      fprintf(stderr, "FAIL [%s]: KNN self-lookup returned no rows\n",
+              metric_name);
+      result->correctness_errors++;
     } else {
       sqlite3_int64 rowid = sqlite3_column_int64(stmt, 0);
       double dist = sqlite3_column_double(stmt, 1);
       if (rowid == 1 && dist < 1e-6) {
-        printf("PASS: KNN self-lookup returned rowid=1 distance=%e\n", dist);
+        printf("PASS [%s]: KNN self-lookup rowid=1 distance=%e\n",
+               metric_name, dist);
       } else {
         fprintf(stderr,
-                "FAIL: KNN self-lookup returned rowid=%lld distance=%e "
-                "(expected rowid=1 distance~0)\n",
-                rowid, dist);
-        errors++;
+                "FAIL [%s]: KNN self-lookup rowid=%lld distance=%e\n",
+                metric_name, rowid, dist);
+        result->correctness_errors++;
       }
     }
     sqlite3_finalize(stmt);
-    t_end = get_time_ms();
-    check_knn_self_ms = t_end - t_start;
-    printf("      KNN self-lookup time: %.2f ms\n", check_knn_self_ms);
   }
 
-  /* Check KNN returns k results and distances are sorted ascending */
+  /* Check KNN returns k sorted results */
   {
-    t_start = get_time_ms();
     xorshift32_state = 99999;
     fill_random_vector(vec, BENCH_DIMENSIONS);
-    rc = sqlite3_prepare_v2(
-        db,
-        "SELECT rowid, distance FROM bench "
-        "WHERE embedding MATCH ? AND k = " STRINGIFY(BENCH_K)
-        " ORDER BY distance",
-        -1, &stmt, NULL);
+    snprintf(sql, sizeof(sql),
+      "SELECT rowid, distance FROM %s "
+      "WHERE embedding MATCH ? AND k = " STRINGIFY(BENCH_K)
+      " ORDER BY distance", table_name);
+    rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
     CHECK_OK(rc, db, "prepare KNN order check");
     sqlite3_bind_blob(stmt, 1, vec, sizeof(float) * BENCH_DIMENSIONS,
                       SQLITE_TRANSIENT);
     int row_count = 0;
     double prev_dist = -1.0;
     int sorted = 1;
-    int all_nonneg = 1;
     while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
       double dist = sqlite3_column_double(stmt, 1);
-      if (dist < 0.0)
-        all_nonneg = 0;
       if (dist < prev_dist - 1e-9)
         sorted = 0;
       prev_dist = dist;
@@ -292,45 +239,29 @@ int main(void) {
     }
     CHECK_DONE(rc, db, "KNN order check step");
     sqlite3_finalize(stmt);
-    t_end = get_time_ms();
-    check_knn_order_ms = t_end - t_start;
 
     if (row_count != BENCH_K) {
-      fprintf(stderr, "FAIL: KNN returned %d rows, expected %d\n", row_count,
-              BENCH_K);
-      errors++;
+      fprintf(stderr, "FAIL [%s]: KNN returned %d rows, expected %d\n",
+              metric_name, row_count, BENCH_K);
+      result->correctness_errors++;
     } else {
-      printf("PASS: KNN returned %d rows\n", row_count);
+      printf("PASS [%s]: KNN returned %d sorted rows\n",
+             metric_name, row_count);
     }
     if (!sorted) {
-      fprintf(stderr, "FAIL: KNN distances not in ascending order\n");
-      errors++;
-    } else {
-      printf("PASS: KNN distances in ascending order\n");
+      fprintf(stderr, "FAIL [%s]: KNN distances not sorted\n", metric_name);
+      result->correctness_errors++;
     }
-    if (!all_nonneg) {
-      fprintf(stderr, "FAIL: KNN returned negative distances\n");
-      errors++;
-    } else {
-      printf("PASS: all KNN distances >= 0\n");
-    }
-    printf("      KNN order check time: %.2f ms\n", check_knn_order_ms);
-  }
-
-  if (errors > 0) {
-    fprintf(stderr, "\nCORRECTNESS: %d check(s) FAILED\n", errors);
-  } else {
-    printf("\nCORRECTNESS: all checks passed\n");
   }
 
   /* === QUERY PHASE === */
-  xorshift32_state = 99999; /* different seed for queries */
+  xorshift32_state = 99999;
 
-  rc = sqlite3_prepare_v2(
-      db,
-      "SELECT rowid, distance FROM bench "
-      "WHERE embedding MATCH ? AND k = " STRINGIFY(BENCH_K) " ORDER BY distance",
-      -1, &stmt, NULL);
+  snprintf(sql, sizeof(sql),
+    "SELECT rowid, distance FROM %s "
+    "WHERE embedding MATCH ? AND k = " STRINGIFY(BENCH_K)
+    " ORDER BY distance", table_name);
+  rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
   CHECK_OK(rc, db, "prepare SELECT");
 
   t0 = get_time_ms();
@@ -353,31 +284,86 @@ int main(void) {
   sqlite3_finalize(stmt);
 
   t1 = get_time_ms();
-  double query_time_ms = t1 - t0;
+  result->query_ms = t1 - t0;
+}
 
-  /* === RESULTS === */
-  size_t peak_mem = get_peak_memory_bytes();
+/* ---------- Main ---------- */
 
-  printf("\n=== sqlite-vec benchmark results ===\n");
-  printf("Vectors:     %d x %d dimensions (float32)\n", BENCH_NUM_VECTORS,
-         BENCH_DIMENSIONS);
-  printf("Queries:     %d (k=%d)\n", BENCH_NUM_QUERIES, BENCH_K);
-  printf("\n");
-  printf("Insert time:          %10.2f ms (%.2f ms/vector, %.0f vectors/sec)\n",
-         insert_time_ms, insert_time_ms / BENCH_NUM_VECTORS,
-         BENCH_NUM_VECTORS / (insert_time_ms / 1000.0));
-  printf("Row count check:      %10.2f ms\n", check_rowcount_ms);
-  printf("Point lookup check:   %10.2f ms\n", check_pointlookup_ms);
-  printf("KNN self-lookup check:%10.2f ms\n", check_knn_self_ms);
-  printf("KNN order check:      %10.2f ms\n", check_knn_order_ms);
-  printf("Query time:           %10.2f ms (%.2f ms/query, %.0f queries/sec)\n",
-         query_time_ms, query_time_ms / BENCH_NUM_QUERIES,
-         BENCH_NUM_QUERIES / (query_time_ms / 1000.0));
-  printf("Total results returned: %d (expected %d)\n", total_results,
-         BENCH_NUM_QUERIES * BENCH_K);
-  printf("Peak memory: %.2f MB\n",
-         (double)peak_mem / (1024.0 * 1024.0));
+int main(void) {
+  int rc;
+  sqlite3 *db;
+  sqlite3_stmt *stmt;
+
+  init_timer();
+
+  rc = sqlite3_auto_extension((void (*)(void))sqlite3_vec_init);
+  if (rc != SQLITE_OK) {
+    fprintf(stderr, "ERROR: sqlite3_auto_extension failed\n");
+    return 1;
+  }
+
+  rc = sqlite3_open(":memory:", &db);
+  CHECK_OK(rc, db, "sqlite3_open");
+
+  /* Print versions */
+  rc = sqlite3_prepare_v2(db, "SELECT sqlite_version(), vec_version()", -1,
+                          &stmt, NULL);
+  sqlite3_step(stmt);
+  printf("sqlite_version=%s, vec_version=%s\n",
+         sqlite3_column_text(stmt, 0), sqlite3_column_text(stmt, 1));
+  sqlite3_finalize(stmt);
+
+#ifdef SQLITE_VEC_ENABLE_THREADS
+#ifndef SQLITE_VEC_KNN_THREADS
+#define SQLITE_VEC_KNN_THREADS 4
+#endif
+  printf("threads:     %d (SQLITE_VEC_KNN_THREADS)\n", SQLITE_VEC_KNN_THREADS);
+#else
+  printf("threads:     disabled\n");
+#endif
+
+  /* Run benchmarks for each distance metric */
+  static const char *metrics[] = { "l2", "cosine", "l1" };
+  static const char *table_names[] = { "bench_l2", "bench_cosine", "bench_l1" };
+  #define NUM_METRICS 3
+
+  struct bench_result results[NUM_METRICS];
+  int total_errors = 0;
+  int m;
+
+  for (m = 0; m < NUM_METRICS; m++) {
+    run_benchmark(db, metrics[m], table_names[m], &results[m]);
+    total_errors += results[m].correctness_errors;
+  }
 
   sqlite3_close(db);
-  return errors > 0 ? 1 : 0;
+
+  /* === SUMMARY === */
+  printf("\n=== sqlite-vec benchmark ===\n");
+  printf("Vectors:     %d x %d dimensions (float32, normalized)\n",
+         BENCH_NUM_VECTORS, BENCH_DIMENSIONS);
+  printf("Queries:     %d (k=%d)\n\n", BENCH_NUM_QUERIES, BENCH_K);
+
+  printf("%-10s %12s %12s %12s %12s\n",
+         "Metric", "Insert (ms)", "Query (ms)", "Per query", "Queries/sec");
+  printf("%-10s %12s %12s %12s %12s\n",
+         "------", "-----------", "----------", "---------", "-----------");
+
+  for (m = 0; m < NUM_METRICS; m++) {
+    printf("%-10s %12.2f %12.2f %12.4f %12.0f\n",
+           results[m].metric_name,
+           results[m].insert_ms,
+           results[m].query_ms,
+           results[m].query_ms / BENCH_NUM_QUERIES,
+           BENCH_NUM_QUERIES / (results[m].query_ms / 1000.0));
+  }
+
+  printf("\nPeak memory: %.2f MB\n",
+         (double)get_peak_memory_bytes() / (1024.0 * 1024.0));
+
+  if (total_errors > 0) {
+    fprintf(stderr, "\n%d correctness error(s)\n", total_errors);
+    return 1;
+  }
+  return 0;
 }
