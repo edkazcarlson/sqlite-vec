@@ -69,6 +69,7 @@ struct VectorColumnDefinition {
   size_t dimensions;
   enum VectorElementType element_type;
   enum Vec0DistanceMetrics distance_metric;
+  int normalize;  // 0 = none (default), 1 = unit
 };
 
 int vec0_parse_vector_column(const char *source, int source_length,

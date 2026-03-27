@@ -110,7 +110,9 @@ typedef size_t usize;
 #endif
 
 #define countof(x) (sizeof(x) / sizeof((x)[0]))
+#ifndef min
 #define min(a, b) (((a) <= (b)) ? (a) : (b))
+#endif
 
 enum VectorElementType {
   // clang-format off
@@ -122,8 +124,13 @@ enum VectorElementType {
 
 #ifdef SQLITE_VEC_ENABLE_AVX
 #include <immintrin.h>
+#ifdef _MSC_VER
+#define PORTABLE_ALIGN32 __declspec(align(32))
+#define PORTABLE_ALIGN64 __declspec(align(64))
+#else
 #define PORTABLE_ALIGN32 __attribute__((aligned(32)))
 #define PORTABLE_ALIGN64 __attribute__((aligned(64)))
+#endif
 
 static f32 l2_sqr_float_avx(const void *pVect1v, const void *pVect2v,
                             const void *qty_ptr) {

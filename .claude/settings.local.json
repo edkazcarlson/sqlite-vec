@@ -10,7 +10,11 @@
       "WebFetch(domain:www.aussieai.com)",
       "Bash(echo \"exit: $?\")",
       "Bash(find /c/Users/Edward/source/repos/sqlite-vec -maxdepth 2 -name Makefile* -o -name *.toml -o -name .github -type d)",
-      "Bash(powershell -ExecutionPolicy Bypass -File scripts/test-unit-msvc.ps1)"
+      "Bash(powershell -ExecutionPolicy Bypass -File scripts/test-unit-msvc.ps1)",
+      "Bash(powershell -File scripts/bench-insert-query-msvc.ps1 2>&1)",
+      "Bash(powershell -File scripts/test-unit-msvc.ps1 2>&1)",
+      "Bash(powershell -File scripts/test-unit-msvc.ps1 -Avx 2>&1)",
+      "Bash(powershell -File scripts/bench-insert-query-msvc.ps1 -Avx 2>&1)"
     ]
   }
 }

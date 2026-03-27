@@ -509,6 +509,67 @@ void test_vec0_parse_vector_column() {
     assert(rc == SQLITE_ERROR);
   }
 
+  // normalize=unit with float column
+  {
+    const char *input = "emb float[128] normalize=unit";
+    rc = vec0_parse_vector_column(input, (int)strlen(input), &col);
+    assert(rc == SQLITE_OK);
+    assert(col.normalize == 1);
+    assert(col.distance_metric == VEC0_DISTANCE_METRIC_L2);
+    assert(col.dimensions == 128);
+    sqlite3_free(col.name);
+  }
+
+  // normalize=unit with distance_metric=cosine (both options)
+  {
+    const char *input = "emb float[128] distance_metric=cosine normalize=unit";
+    rc = vec0_parse_vector_column(input, (int)strlen(input), &col);
+    assert(rc == SQLITE_OK);
+    assert(col.normalize == 1);
+    assert(col.distance_metric == VEC0_DISTANCE_METRIC_COSINE);
+    sqlite3_free(col.name);
+  }
+
+  // normalize=unit with options in reverse order
+  {
+    const char *input = "emb float[128] normalize=unit distance_metric=cosine";
+    rc = vec0_parse_vector_column(input, (int)strlen(input), &col);
+    assert(rc == SQLITE_OK);
+    assert(col.normalize == 1);
+    assert(col.distance_metric == VEC0_DISTANCE_METRIC_COSINE);
+    sqlite3_free(col.name);
+  }
+
+  // Default: normalize=0 when not specified
+  {
+    const char *input = "emb float[128]";
+    rc = vec0_parse_vector_column(input, (int)strlen(input), &col);
+    assert(rc == SQLITE_OK);
+    assert(col.normalize == 0);
+    sqlite3_free(col.name);
+  }
+
+  // Error: normalize=unit on int8 column
+  {
+    const char *input = "emb int8[128] normalize=unit";
+    rc = vec0_parse_vector_column(input, (int)strlen(input), &col);
+    assert(rc == SQLITE_ERROR);
+  }
+
+  // Error: normalize=unit on bit column
+  {
+    const char *input = "emb bit[64] normalize=unit";
+    rc = vec0_parse_vector_column(input, (int)strlen(input), &col);
+    assert(rc == SQLITE_ERROR);
+  }
+
+  // Error: unknown normalize value
+  {
+    const char *input = "emb float[128] normalize=l2";
+    rc = vec0_parse_vector_column(input, (int)strlen(input), &col);
+    assert(rc == SQLITE_ERROR);
+  }
+
   printf("  All vec0_parse_vector_column tests passed.\n");
 }
 
