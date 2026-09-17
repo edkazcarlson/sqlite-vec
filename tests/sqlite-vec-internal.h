@@ -6,7 +6,10 @@
 #include <stdint.h>
 
 #ifndef SQLITE_VEC_ENABLE_IVF
-#define SQLITE_VEC_ENABLE_IVF 1
+#ifndef SQLITE_VEC_EXPERIMENTAL_IVF_ENABLE
+#define SQLITE_VEC_EXPERIMENTAL_IVF_ENABLE 0
+#endif
+#define SQLITE_VEC_ENABLE_IVF SQLITE_VEC_EXPERIMENTAL_IVF_ENABLE
 #endif
 
 int min_idx(
@@ -59,6 +62,7 @@ enum VectorElementType {
   SQLITE_VEC_ELEMENT_TYPE_FLOAT32 = 223 + 0,
   SQLITE_VEC_ELEMENT_TYPE_BIT     = 223 + 1,
   SQLITE_VEC_ELEMENT_TYPE_INT8    = 223 + 2,
+  SQLITE_VEC_ELEMENT_TYPE_FLOAT16 = 223 + 3,
 };
 
 enum Vec0DistanceMetrics {
@@ -74,16 +78,6 @@ enum Vec0IndexType {
 #endif
   VEC0_INDEX_TYPE_IVF = 3,
   VEC0_INDEX_TYPE_DISKANN = 4,
-};
-
-enum Vec0RescoreQuantizerType {
-  VEC0_RESCORE_QUANTIZER_BIT = 1,
-  VEC0_RESCORE_QUANTIZER_INT8 = 2,
-};
-
-struct Vec0RescoreConfig {
-  enum Vec0RescoreQuantizerType quantizer_type;
-  int oversample;
 };
 
 #if SQLITE_VEC_ENABLE_IVF
@@ -112,6 +106,7 @@ enum Vec0RescoreQuantizerType {
 struct Vec0RescoreConfig {
   enum Vec0RescoreQuantizerType quantizer_type;
   int oversample;
+  int oversample_search;
 };
 #endif
 

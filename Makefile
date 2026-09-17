@@ -92,7 +92,7 @@ $(BUILD_DIR): $(prefix)
 	mkdir -p $@
 
 
-$(TARGET_LOADABLE): sqlite-vec.c sqlite-vec.h $(prefix)
+$(TARGET_LOADABLE): sqlite-vec.c $(wildcard sqlite-vec-*.c) sqlite-vec.h $(prefix)
 	$(CC) \
 		-fPIC -shared \
 		-Wall -Wextra \
@@ -101,7 +101,7 @@ $(TARGET_LOADABLE): sqlite-vec.c sqlite-vec.h $(prefix)
 		$(CFLAGS) \
 		$< -o $@
 
-$(TARGET_STATIC): sqlite-vec.c sqlite-vec.h $(prefix) $(OBJS_DIR)
+$(TARGET_STATIC): sqlite-vec.c $(wildcard sqlite-vec-*.c) sqlite-vec.h $(prefix) $(OBJS_DIR)
 	$(CC) -Ivendor/ $(CFLAGS) -DSQLITE_CORE -DSQLITE_VEC_STATIC \
 	-O3 -c  $< -o $(OBJS_DIR)/vec.o
 	$(AR) rcs $@ $(OBJS_DIR)/vec.o
@@ -129,7 +129,7 @@ $(OBJS_DIR)/shell.o: $(BUILD_DIR)/shell-new.c $(OBJS_DIR)
 $(LIBS_DIR)/shell.a: $(OBJS_DIR)/shell.o $(LIBS_DIR)
 	$(AR) rcs $@ $<
 
-$(OBJS_DIR)/sqlite-vec.o: sqlite-vec.c $(OBJS_DIR)
+$(OBJS_DIR)/sqlite-vec.o: sqlite-vec.c $(wildcard sqlite-vec-*.c) $(OBJS_DIR)
 	$(CC) -c -g3 -Ivendor/ -I./ $(CFLAGS) $< -o $@
 
 $(LIBS_DIR)/sqlite-vec.a: $(OBJS_DIR)/sqlite-vec.o $(LIBS_DIR)
@@ -167,7 +167,7 @@ TARGET_AMALGAMATION=$(prefix)/sqlite-vec.c
 amalgamation: $(TARGET_AMALGAMATION)
 
 $(TARGET_AMALGAMATION): sqlite-vec.c $(wildcard sqlite-vec-*.c) scripts/amalgamate.py $(prefix)
-	python3 scripts/amalgamate.py sqlite-vec.c > $@
+	uv run --no-project python scripts/amalgamate.py sqlite-vec.c > $@
 
 FORMAT_FILES=sqlite-vec.h sqlite-vec.c
 format: $(FORMAT_FILES)
@@ -311,7 +311,7 @@ $(SQLITE_WASM_COMPILED_SQLITE3C): $(SQLITE_WASM_SRCZIP) $(BUILD_DIR)
 	(cd $(BUILD_DIR)/sqlite-src-$(SQLITE_WASM_VERSION)/ && ./configure --enable-all && make sqlite3.c)
 	touch $@
 
-$(TARGET_WASM_LIB): examples/wasm/wasm.c sqlite-vec.c $(BUILD_DIR) $(WASM_DIR)
+$(TARGET_WASM_LIB): examples/wasm/wasm.c sqlite-vec.c $(wildcard sqlite-vec-*.c) $(BUILD_DIR) $(WASM_DIR)
 	emcc -O3  -I./ -Ivendor -DSQLITE_CORE -c examples/wasm/wasm.c -o $(BUILD_DIR)/wasm.wasm.o
 	emcc -O3  -I./ -Ivendor -DSQLITE_CORE -c sqlite-vec.c -o $(BUILD_DIR)/sqlite-vec.wasm.o
 	emar rcs $@ $(BUILD_DIR)/wasm.wasm.o $(BUILD_DIR)/sqlite-vec.wasm.o

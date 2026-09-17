@@ -73,18 +73,84 @@ typedef size_t usize;
 #define SQLITE_VEC_ENABLE_RESCORE 1
 #endif
 
+/* Disable individual exact-search optimizations for controlled benchmarks. */
+#ifndef SQLITE_VEC_EXACT_SIMD
+#define SQLITE_VEC_EXACT_SIMD 1
+#endif
+#ifndef SQLITE_VEC_EXACT_HEAP
+#define SQLITE_VEC_EXACT_HEAP 1
+#endif
+#ifndef SQLITE_VEC_FILTER_FIRST
+#define SQLITE_VEC_FILTER_FIRST 1
+#endif
+
 enum VectorElementType {
   // clang-format off
   SQLITE_VEC_ELEMENT_TYPE_FLOAT32 = 223 + 0,
   SQLITE_VEC_ELEMENT_TYPE_BIT     = 223 + 1,
   SQLITE_VEC_ELEMENT_TYPE_INT8    = 223 + 2,
+  SQLITE_VEC_ELEMENT_TYPE_FLOAT16 = 223 + 3,
   // clang-format on
 };
+
+enum Vec0DistanceMetrics {
+  VEC0_DISTANCE_METRIC_L2 = 1,
+  VEC0_DISTANCE_METRIC_COSINE = 2,
+  VEC0_DISTANCE_METRIC_L1 = 3,
+};
+
+#include "sqlite-vec-fp16.c"
 
 #ifdef SQLITE_VEC_ENABLE_AVX
 #include <immintrin.h>
 #define PORTABLE_ALIGN32 __attribute__((aligned(32)))
 #define PORTABLE_ALIGN64 __attribute__((aligned(64)))
+
+#if SQLITE_VEC_EXACT_SIMD
+static f32 vec_avx_sum(__m256 value) {
+  __m128 sum = _mm_add_ps(_mm256_castps256_ps128(value), _mm256_extractf128_ps(value, 1));
+  sum = _mm_add_ps(sum, _mm_movehl_ps(sum, sum));
+  sum = _mm_add_ss(sum, _mm_shuffle_ps(sum, sum, 1));
+  return _mm_cvtss_f32(sum);
+}
+
+static f32 vec_avx_distance(const f32 *a, const f32 *b, size_t n, int metric,
+                            f32 query_norm) {
+  __m256 sums[4] = {_mm256_setzero_ps(), _mm256_setzero_ps(), _mm256_setzero_ps(), _mm256_setzero_ps()};
+  __m256 norms[4] = {_mm256_setzero_ps(), _mm256_setzero_ps(), _mm256_setzero_ps(), _mm256_setzero_ps()};
+  size_t i = 0;
+  for (; i + 32 <= n; i += 32) {
+    for (int j = 0; j < 4; j++) {
+      __m256 x = _mm256_loadu_ps(a + i + j * 8);
+      __m256 y = _mm256_loadu_ps(b + i + j * 8);
+      if (metric == VEC0_DISTANCE_METRIC_COSINE) {
+        sums[j] = _mm256_add_ps(sums[j], _mm256_mul_ps(x, y));
+        norms[j] = _mm256_add_ps(norms[j], _mm256_mul_ps(x, x));
+      } else {
+        __m256 diff = _mm256_sub_ps(x, y);
+        sums[j] = _mm256_add_ps(sums[j], _mm256_mul_ps(diff, diff));
+      }
+    }
+  }
+  for (; i + 8 <= n; i += 8) {
+    __m256 x = _mm256_loadu_ps(a + i), y = _mm256_loadu_ps(b + i);
+    if (metric == VEC0_DISTANCE_METRIC_COSINE) {
+      sums[0] = _mm256_add_ps(sums[0], _mm256_mul_ps(x, y));
+      norms[0] = _mm256_add_ps(norms[0], _mm256_mul_ps(x, x));
+    } else {
+      __m256 diff = _mm256_sub_ps(x, y);
+      sums[0] = _mm256_add_ps(sums[0], _mm256_mul_ps(diff, diff));
+    }
+  }
+  f32 sum = vec_avx_sum(_mm256_add_ps(_mm256_add_ps(sums[0], sums[1]), _mm256_add_ps(sums[2], sums[3])));
+  f32 norm = vec_avx_sum(_mm256_add_ps(_mm256_add_ps(norms[0], norms[1]), _mm256_add_ps(norms[2], norms[3])));
+  for (; i < n; i++) {
+    if (metric == VEC0_DISTANCE_METRIC_COSINE) { sum += a[i] * b[i]; norm += a[i] * a[i]; }
+    else { f32 diff = a[i] - b[i]; sum += diff * diff; }
+  }
+  return metric == VEC0_DISTANCE_METRIC_COSINE ? 1 - sum / (sqrtf(norm) * query_norm) : sqrtf(sum);
+}
+#endif
 
 static f32 l2_sqr_float_avx(const void *pVect1v, const void *pVect2v,
                             const void *qty_ptr) {
@@ -411,6 +477,10 @@ static f32 l2_sqr_int8(const void *pA, const void *pB, const void *pD) {
 }
 
 static f32 distance_l2_sqr_float(const void *a, const void *b, const void *d) {
+#if defined(SQLITE_VEC_ENABLE_AVX) && SQLITE_VEC_EXACT_SIMD
+  if (*(const size_t *)d >= 8 && *(const size_t *)d % 16 != 0)
+    return vec_avx_distance(a, b, *(const size_t *)d, VEC0_DISTANCE_METRIC_L2, 0);
+#endif
 #ifdef SQLITE_VEC_ENABLE_NEON
   if ((*(const size_t *)d) > 16) {
     return l2_sqr_float_neon(a, b, d);
@@ -483,6 +553,11 @@ static double distance_l1_f32(const void *a, const void *b, const void *d) {
 
 static f32 distance_cosine_float(const void *pVect1v, const void *pVect2v,
                                  const void *qty_ptr) {
+#if defined(SQLITE_VEC_ENABLE_AVX) && SQLITE_VEC_EXACT_SIMD
+  size_t n = *(const size_t *)qty_ptr;
+  if (n >= 8)
+    return vec_avx_distance(pVect1v, pVect2v, n, VEC0_DISTANCE_METRIC_COSINE, vec_query_norm(pVect2v, n));
+#endif
 #ifdef SQLITE_VEC_ENABLE_NEON
   if ((*(const size_t *)qty_ptr) > 16) {
     return cosine_float_neon(pVect1v, pVect2v, qty_ptr);
@@ -931,6 +1006,8 @@ void array_cleanup(struct Array *array) {
 
 char *vector_subtype_name(int subtype) {
   switch (subtype) {
+  case SQLITE_VEC_ELEMENT_TYPE_FLOAT16:
+    return "float16";
   case SQLITE_VEC_ELEMENT_TYPE_FLOAT32:
     return "float32";
   case SQLITE_VEC_ELEMENT_TYPE_INT8:
@@ -964,6 +1041,11 @@ static int fvec_from_value(sqlite3_value *value, f32 **vector,
                            size_t *dimensions, fvec_cleanup *cleanup,
                            char **pzErr) {
   int value_type = sqlite3_value_type(value);
+
+  if (sqlite3_value_subtype(value) == SQLITE_VEC_ELEMENT_TYPE_FLOAT16) {
+    *pzErr = sqlite3_mprintf("float16 input requires explicit conversion with vec_f32()");
+    return SQLITE_ERROR;
+  }
 
   if (value_type == SQLITE_BLOB) {
     const void *blob = sqlite3_value_blob(value);
@@ -1260,10 +1342,30 @@ static int int8_vec_from_value(sqlite3_value *value, i8 **vector,
  * @param pzErrorMessage
  * @return int SQLITE_OK on success, error code otherwise
  */
+static int halfvec_from_value(sqlite3_value *value, void **vector,
+                             size_t *dimensions, vector_cleanup *cleanup,
+                             char **error) {
+  int bytes = sqlite3_value_bytes(value);
+  if (sqlite3_value_type(value) != SQLITE_BLOB || bytes == 0 || bytes % 2) {
+    *error = sqlite3_mprintf("float16 requires a nonempty BLOB with an even byte length");
+    return SQLITE_ERROR;
+  }
+  *vector = (void *)sqlite3_value_blob(value);
+  if (!*vector) { *error = sqlite3_mprintf("out of memory"); return SQLITE_NOMEM; }
+  *dimensions = bytes / 2;
+  *cleanup = vector_cleanup_noop;
+  return SQLITE_OK;
+}
+
 int vector_from_value(sqlite3_value *value, void **vector, size_t *dimensions,
                       enum VectorElementType *element_type,
                       vector_cleanup *cleanup, char **pzErrorMessage) {
   int subtype = sqlite3_value_subtype(value);
+  if (subtype == SQLITE_VEC_ELEMENT_TYPE_FLOAT16) {
+    int rc = halfvec_from_value(value, vector, dimensions, cleanup, pzErrorMessage);
+    if (rc == SQLITE_OK) *element_type = SQLITE_VEC_ELEMENT_TYPE_FLOAT16;
+    return rc;
+  }
   if (!subtype || (subtype == SQLITE_VEC_ELEMENT_TYPE_FLOAT32) ||
       (subtype == JSON_SUBTYPE)) {
     int rc = fvec_from_value(value, (f32 **)vector, dimensions,
@@ -1292,6 +1394,20 @@ int vector_from_value(sqlite3_value *value, void **vector, size_t *dimensions,
   }
   *pzErrorMessage = sqlite3_mprintf("Unknown subtype: %d", subtype);
   return SQLITE_ERROR;
+}
+
+/* SQLite can discard expression subtypes while materializing UPDATE values.
+ * A declared half column supplies the missing type for an untyped raw blob. */
+static int vector_from_column_value(sqlite3_value *value,
+    enum VectorElementType expected, void **vector, size_t *dimensions,
+    enum VectorElementType *element_type, vector_cleanup *cleanup, char **error) {
+  if (expected == SQLITE_VEC_ELEMENT_TYPE_FLOAT16 &&
+      sqlite3_value_type(value) == SQLITE_BLOB && !sqlite3_value_subtype(value)) {
+    int rc = halfvec_from_value(value, vector, dimensions, cleanup, error);
+    if (rc == SQLITE_OK) *element_type = SQLITE_VEC_ELEMENT_TYPE_FLOAT16;
+    return rc;
+  }
+  return vector_from_value(value, vector, dimensions, element_type, cleanup, error);
 }
 
 int ensure_vector_match(sqlite3_value *aValue, sqlite3_value *bValue, void **a,
@@ -1347,8 +1463,64 @@ int ensure_vector_match(sqlite3_value *aValue, sqlite3_value *bValue, void **a,
 int _cmp(const void *a, const void *b) { return (*(i64 *)a - *(i64 *)b); }
 
 #pragma region scalar functions
+static void vec_f16(sqlite3_context *context, int argc, sqlite3_value **argv) {
+  assert(argc == 1);
+  unsigned subtype = sqlite3_value_subtype(argv[0]);
+  if (sqlite3_value_type(argv[0]) == SQLITE_BLOB &&
+      (!subtype || subtype == SQLITE_VEC_ELEMENT_TYPE_FLOAT16)) {
+    void *data;
+    size_t n;
+    vector_cleanup cleanup;
+    char *error;
+    if (halfvec_from_value(argv[0], &data, &n, &cleanup, &error) != SQLITE_OK) {
+      sqlite3_result_error(context, error, -1);
+      sqlite3_free(error);
+      return;
+    }
+    sqlite3_result_blob(context, data, n * 2, SQLITE_TRANSIENT);
+  } else {
+    if (subtype && subtype != SQLITE_VEC_ELEMENT_TYPE_FLOAT32 && subtype != JSON_SUBTYPE) {
+      sqlite3_result_error(context, "vec_f16 accepts raw half blobs, JSON, or vec_f32 inputs", -1);
+      return;
+    }
+    f32 *data;
+    size_t n;
+    fvec_cleanup cleanup;
+    char *error;
+    if (fvec_from_value(argv[0], &data, &n, &cleanup, &error) != SQLITE_OK) {
+      sqlite3_result_error(context, error, -1);
+      sqlite3_free(error);
+      return;
+    }
+    uint16_t *half = sqlite3_malloc64(n * 2);
+    if (!half) { cleanup(data); sqlite3_result_error_nomem(context); return; }
+    for (size_t i = 0; i < n; i++) half[i] = vec_float_to_half(data[i]);
+    cleanup(data);
+    sqlite3_result_blob(context, half, n * 2, sqlite3_free);
+  }
+  sqlite3_result_subtype(context, SQLITE_VEC_ELEMENT_TYPE_FLOAT16);
+}
+
 static void vec_f32(sqlite3_context *context, int argc, sqlite3_value **argv) {
   assert(argc == 1);
+  if (sqlite3_value_subtype(argv[0]) == SQLITE_VEC_ELEMENT_TYPE_FLOAT16) {
+    void *data;
+    size_t n;
+    vector_cleanup cleanup;
+    char *error;
+    if (halfvec_from_value(argv[0], &data, &n, &cleanup, &error) != SQLITE_OK) {
+      sqlite3_result_error(context, error, -1);
+      sqlite3_free(error);
+      return;
+    }
+    if (n > INT_MAX / sizeof(f32)) { sqlite3_result_error_toobig(context); return; }
+    f32 *out = sqlite3_malloc64(n * sizeof(f32));
+    if (!out) { sqlite3_result_error_nomem(context); return; }
+    vec_half_expand(data, out, n);
+    sqlite3_result_blob(context, out, n * sizeof(f32), sqlite3_free);
+    sqlite3_result_subtype(context, SQLITE_VEC_ELEMENT_TYPE_FLOAT32);
+    return;
+  }
   int rc;
   f32 *vector = NULL;
   size_t dimensions;
@@ -1367,6 +1539,10 @@ static void vec_f32(sqlite3_context *context, int argc, sqlite3_value **argv) {
 
 static void vec_bit(sqlite3_context *context, int argc, sqlite3_value **argv) {
   assert(argc == 1);
+  if (sqlite3_value_subtype(argv[0]) == SQLITE_VEC_ELEMENT_TYPE_FLOAT16) {
+    sqlite3_result_error(context, "vec_bit does not accept float16 vectors", -1);
+    return;
+  }
   int rc;
   u8 *vector;
   size_t dimensions;
@@ -1384,6 +1560,10 @@ static void vec_bit(sqlite3_context *context, int argc, sqlite3_value **argv) {
 }
 static void vec_int8(sqlite3_context *context, int argc, sqlite3_value **argv) {
   assert(argc == 1);
+  if (sqlite3_value_subtype(argv[0]) == SQLITE_VEC_ELEMENT_TYPE_FLOAT16) {
+    sqlite3_result_error(context, "vec_int8 does not accept float16 vectors", -1);
+    return;
+  }
   int rc;
   i8 *vector;
   size_t dimensions;
@@ -1420,6 +1600,19 @@ static void vec_length(sqlite3_context *context, int argc,
   cleanup(vector);
 }
 
+static void vec_half_scalar_distance(sqlite3_context *context, const void *a,
+                                     const void *b, size_t n, int metric) {
+  const char *error = vec_half_validate(a, n, metric);
+  if (!error) error = vec_half_validate(b, n, metric);
+  if (error) { sqlite3_result_error(context, error, -1); return; }
+  f32 *query = sqlite3_malloc64(n * sizeof(f32));
+  if (!query) { sqlite3_result_error_nomem(context); return; }
+  vec_half_expand(b, query, n);
+  f32 norm = metric == VEC0_DISTANCE_METRIC_COSINE ? vec_query_norm(query, n) : 0;
+  sqlite3_result_double(context, vec_half_kernel()(a, query, n, metric, norm));
+  sqlite3_free(query);
+}
+
 static void vec_distance_cosine(sqlite3_context *context, int argc,
                                 sqlite3_value **argv) {
   assert(argc == 2);
@@ -1438,6 +1631,9 @@ static void vec_distance_cosine(sqlite3_context *context, int argc,
   }
 
   switch (elementType) {
+  case SQLITE_VEC_ELEMENT_TYPE_FLOAT16:
+    vec_half_scalar_distance(context, a, b, dimensions, VEC0_DISTANCE_METRIC_COSINE);
+    goto finish;
   case SQLITE_VEC_ELEMENT_TYPE_BIT: {
     sqlite3_result_error(
         context, "Cannot calculate cosine distance between two bitvectors.",
@@ -1480,6 +1676,9 @@ static void vec_distance_l2(sqlite3_context *context, int argc,
   }
 
   switch (elementType) {
+  case SQLITE_VEC_ELEMENT_TYPE_FLOAT16:
+    vec_half_scalar_distance(context, a, b, dimensions, VEC0_DISTANCE_METRIC_L2);
+    goto finish;
   case SQLITE_VEC_ELEMENT_TYPE_BIT: {
     sqlite3_result_error(
         context, "Cannot calculate L2 distance between two bitvectors.", -1);
@@ -1521,6 +1720,9 @@ static void vec_distance_l1(sqlite3_context *context, int argc,
   }
 
   switch (elementType) {
+  case SQLITE_VEC_ELEMENT_TYPE_FLOAT16:
+    vec_half_scalar_distance(context, a, b, dimensions, VEC0_DISTANCE_METRIC_L1);
+    goto finish;
   case SQLITE_VEC_ELEMENT_TYPE_BIT: {
     sqlite3_result_error(
         context, "Cannot calculate L1 distance between two bitvectors.", -1);
@@ -1562,6 +1764,9 @@ static void vec_distance_hamming(sqlite3_context *context, int argc,
   }
 
   switch (elementType) {
+  case SQLITE_VEC_ELEMENT_TYPE_FLOAT16:
+    sqlite3_result_error(context, "vec_distance_hamming does not support float16; convert with vec_f32()", -1);
+    goto finish;
   case SQLITE_VEC_ELEMENT_TYPE_BIT: {
     sqlite3_result_double(context, distance_hamming(a, b, &dimensions));
     goto finish;
@@ -1588,6 +1793,8 @@ finish:
 
 char *vec_type_name(enum VectorElementType elementType) {
   switch (elementType) {
+  case SQLITE_VEC_ELEMENT_TYPE_FLOAT16:
+    return "float16";
   case SQLITE_VEC_ELEMENT_TYPE_FLOAT32:
     return "float32";
   case SQLITE_VEC_ELEMENT_TYPE_INT8:
@@ -1670,11 +1877,12 @@ static void vec_quantize_binary(sqlite3_context *context, int argc,
     }
     break;
   }
+  case SQLITE_VEC_ELEMENT_TYPE_FLOAT16:
   case SQLITE_VEC_ELEMENT_TYPE_BIT: {
     sqlite3_result_error(context,
-                         "Can only binary quantize float or int8 vectors", -1);
+                         "Can only binary quantize float32 or int8 vectors", -1);
     sqlite3_free(out);
-    return;
+    goto cleanup;
   }
   }
   sqlite3_result_blob(context, out, sz, sqlite3_free);
@@ -1748,6 +1956,9 @@ static void vec_add(sqlite3_context *context, int argc, sqlite3_value **argv) {
   }
 
   switch (elementType) {
+  case SQLITE_VEC_ELEMENT_TYPE_FLOAT16:
+    sqlite3_result_error(context, "vec_add does not support float16; convert with vec_f32()", -1);
+    goto finish;
   case SQLITE_VEC_ELEMENT_TYPE_BIT: {
     sqlite3_result_error(context, "Cannot add two bitvectors together.", -1);
     goto finish;
@@ -1805,6 +2016,9 @@ static void vec_sub(sqlite3_context *context, int argc, sqlite3_value **argv) {
   }
 
   switch (elementType) {
+  case SQLITE_VEC_ELEMENT_TYPE_FLOAT16:
+    sqlite3_result_error(context, "vec_sub does not support float16; convert with vec_f32()", -1);
+    goto finish;
   case SQLITE_VEC_ELEMENT_TYPE_BIT: {
     sqlite3_result_error(context, "Cannot subtract two bitvectors together.",
                          -1);
@@ -1904,6 +2118,9 @@ static void vec_slice(sqlite3_context *context, int argc,
   size_t n = end - start;
 
   switch (elementType) {
+  case SQLITE_VEC_ELEMENT_TYPE_FLOAT16:
+    sqlite3_result_error(context, "vec_slice does not support float16; convert with vec_f32()", -1);
+    goto done;
   case SQLITE_VEC_ELEMENT_TYPE_FLOAT32: {
     int outSize = n * sizeof(f32);
     f32 *out = sqlite3_malloc(outSize);
@@ -1985,9 +2202,9 @@ static void vec_to_json(sqlite3_context *context, int argc,
     if (i != 0) {
       sqlite3_str_appendall(str, ",");
     }
-    if (elementType == SQLITE_VEC_ELEMENT_TYPE_FLOAT32) {
-      f32 value = ((f32 *)vector)[i];
-      if (isnan(value)) {
+    if (elementType == SQLITE_VEC_ELEMENT_TYPE_FLOAT32 || elementType == SQLITE_VEC_ELEMENT_TYPE_FLOAT16) {
+      f32 value = elementType == SQLITE_VEC_ELEMENT_TYPE_FLOAT16 ? vec_half_at(vector, i) : ((f32 *)vector)[i];
+      if (!isfinite(value)) {
         sqlite3_str_appendall(str, "null");
       } else {
         sqlite3_str_appendf(str, "%f", value);
@@ -2529,12 +2746,6 @@ int vec0_parse_primary_key_definition(const char *source, int source_length,
   return SQLITE_OK;
 }
 
-enum Vec0DistanceMetrics {
-  VEC0_DISTANCE_METRIC_L2 = 1,
-  VEC0_DISTANCE_METRIC_COSINE = 2,
-  VEC0_DISTANCE_METRIC_L1 = 3,
-};
-
 /**
  * Compute distance between two full-precision vectors using the appropriate
  * distance function for the given element type and metric.
@@ -2545,6 +2756,9 @@ static f32 vec0_distance_full(
     enum VectorElementType elementType,
     enum Vec0DistanceMetrics metric) {
   switch (elementType) {
+    case SQLITE_VEC_ELEMENT_TYPE_FLOAT16:
+      assert(!"float16 requires flat search");
+      return NAN;
     case SQLITE_VEC_ELEMENT_TYPE_FLOAT32:
       switch (metric) {
         case VEC0_DISTANCE_METRIC_L2:
@@ -2714,6 +2928,8 @@ struct Vec0MetadataColumnDefinition {
 size_t vector_byte_size(enum VectorElementType element_type,
                         size_t dimensions) {
   switch (element_type) {
+  case SQLITE_VEC_ELEMENT_TYPE_FLOAT16:
+    return dimensions * 2;
   case SQLITE_VEC_ELEMENT_TYPE_FLOAT32:
     return dimensions * sizeof(f32);
   case SQLITE_VEC_ELEMENT_TYPE_INT8:
@@ -3012,13 +3228,19 @@ int vec0_parse_vector_column(const char *source, int source_length,
       token.token_type != TOKEN_TYPE_IDENTIFIER) {
     return SQLITE_EMPTY;
   }
-  if (sqlite3_strnicmp(token.start, "float", 5) == 0 ||
-      sqlite3_strnicmp(token.start, "f32", 3) == 0) {
+  int typeLength = (int)(token.end - token.start);
+  if ((typeLength == 7 && sqlite3_strnicmp(token.start, "float16", 7) == 0) ||
+      (typeLength == 3 && sqlite3_strnicmp(token.start, "f16", 3) == 0)) {
+    elementType = SQLITE_VEC_ELEMENT_TYPE_FLOAT16;
+  } else if ((typeLength == 5 && sqlite3_strnicmp(token.start, "float", 5) == 0) ||
+      (typeLength == 6 && sqlite3_strnicmp(token.start, "float8", 6) == 0) ||
+      (typeLength == 7 && sqlite3_strnicmp(token.start, "float32", 7) == 0) ||
+      (typeLength == 3 && sqlite3_strnicmp(token.start, "f32", 3) == 0)) {
     elementType = SQLITE_VEC_ELEMENT_TYPE_FLOAT32;
-  } else if (sqlite3_strnicmp(token.start, "int8", 4) == 0 ||
-             sqlite3_strnicmp(token.start, "i8", 2) == 0) {
+  } else if ((typeLength == 4 && sqlite3_strnicmp(token.start, "int8", 4) == 0) ||
+             (typeLength == 2 && sqlite3_strnicmp(token.start, "i8", 2) == 0)) {
     elementType = SQLITE_VEC_ELEMENT_TYPE_INT8;
-  } else if (sqlite3_strnicmp(token.start, "bit", 3) == 0) {
+  } else if (typeLength == 3 && sqlite3_strnicmp(token.start, "bit", 3) == 0) {
     elementType = SQLITE_VEC_ELEMENT_TYPE_BIT;
   } else {
     return SQLITE_EMPTY;
@@ -3183,6 +3405,9 @@ int vec0_parse_vector_column(const char *source, int source_length,
     }
   }
 
+  if (elementType == SQLITE_VEC_ELEMENT_TYPE_FLOAT16 && indexType != VEC0_INDEX_TYPE_FLAT)
+    return SQLITE_ERROR;
+
   outColumn->name = sqlite3_mprintf("%.*s", nameLength, name);
   if (!outColumn->name) {
     return SQLITE_ERROR;
@@ -3341,6 +3566,9 @@ static int vec_eachColumn(sqlite3_vtab_cursor *cur, sqlite3_context *context,
   switch (i) {
   case VEC_EACH_COLUMN_VALUE:
     switch (pCur->vector_type) {
+    case SQLITE_VEC_ELEMENT_TYPE_FLOAT16:
+      sqlite3_result_double(context, vec_half_at(pCur->vector, pCur->iRowid));
+      break;
     case SQLITE_VEC_ELEMENT_TYPE_FLOAT32: {
       sqlite3_result_double(context, ((f32 *)pCur->vector)[pCur->iRowid]);
       break;
@@ -3763,6 +3991,8 @@ void vec0_free(vec0_vtab *p) {
   }
 
   for (int i = 0; i < p->numMetadataColumns; i++) {
+    sqlite3_free(p->shadowMetadataChunksNames[i]);
+    p->shadowMetadataChunksNames[i] = NULL;
     sqlite3_free(p->metadata_columns[i].name);
     p->metadata_columns[i].name = NULL;
   }
@@ -6513,64 +6743,53 @@ int min_idx(const f32 *distances, i32 n, u8 *candidates, i32 *out, i32 k,
   assert(k > 0);
   assert(k <= n);
 
-#ifdef SQLITE_VEC_EXPERIMENTAL_MIN_IDX
-  // Max-heap variant: O(n log k) single-pass.
-  // out[0..heap_size-1] stores indices; heap ordered by distances descending
-  // so out[0] is always the index of the LARGEST distance in the top-k.
-  (void)bTaken;
-  int heap_size = 0;
-
-  #define HEAP_SIFT_UP(pos) do {                          \
-    int _c = (pos);                                       \
-    while (_c > 0) {                                      \
-      int _p = (_c - 1) / 2;                              \
-      if (distances[out[_p]] < distances[out[_c]]) {      \
-        i32 _tmp = out[_p]; out[_p] = out[_c]; out[_c] = _tmp; \
-        _c = _p;                                          \
-      } else break;                                       \
-    }                                                     \
-  } while(0)
-
-  #define HEAP_SIFT_DOWN(pos, sz) do {                    \
-    int _p = (pos);                                       \
-    for (;;) {                                            \
-      int _l = 2*_p + 1, _r = 2*_p + 2, _largest = _p;  \
-      if (_l < (sz) && distances[out[_l]] > distances[out[_largest]]) \
-        _largest = _l;                                    \
-      if (_r < (sz) && distances[out[_r]] > distances[out[_largest]]) \
-        _largest = _r;                                    \
-      if (_largest == _p) break;                          \
-      i32 _tmp = out[_p]; out[_p] = out[_largest]; out[_largest] = _tmp; \
-      _p = _largest;                                      \
-    }                                                     \
-  } while(0)
-
-  for (int i = 0; i < n; i++) {
-    if (!bitmap_get(candidates, i))
-      continue;
-    if (heap_size < k) {
-      out[heap_size] = i;
-      heap_size++;
-      HEAP_SIFT_UP(heap_size - 1);
-    } else if (distances[i] < distances[out[0]]) {
-      out[0] = i;
-      HEAP_SIFT_DOWN(0, heap_size);
+#if SQLITE_VEC_EXACT_HEAP
+  if (k > 1) {
+    /* Preserve legacy NaN behavior, which has no total ordering. */
+    for (int i = 0; i < n; i++)
+      if (bitmap_get(candidates, i) && isnan(distances[i])) goto legacy_min_idx;
+    int used = 0;
+    /* Equal distances prefer the later chunk offset, as the original <= scan did. */
+#define BETTER(a, b) (distances[(a)] < distances[(b)] || \
+                     (distances[(a)] == distances[(b)] && (a) > (b)))
+#define SIFT_DOWN(sz) do { \
+      int parent = 0; \
+      for (;;) { \
+        int left = 2 * parent + 1, right = left + 1, worst = parent; \
+        if (left < (sz) && BETTER(out[worst], out[left])) worst = left; \
+        if (right < (sz) && BETTER(out[worst], out[right])) worst = right; \
+        if (worst == parent) break; \
+        i32 tmp = out[parent]; out[parent] = out[worst]; out[worst] = tmp; \
+        parent = worst; \
+      } \
+    } while (0)
+    for (int i = 0; i < n; i++) {
+      if (!bitmap_get(candidates, i)) continue;
+      if (used < k) {
+        int child = used++;
+        out[child] = i;
+        while (child > 0) {
+          int parent = (child - 1) / 2;
+          if (!BETTER(out[parent], out[child])) break;
+          i32 tmp = out[parent]; out[parent] = out[child]; out[child] = tmp;
+          child = parent;
+        }
+      } else if (BETTER(i, out[0])) {
+        out[0] = i;
+        SIFT_DOWN(used);
+      }
     }
+    for (int end = used - 1; end > 0; end--) {
+      i32 tmp = out[0]; out[0] = out[end]; out[end] = tmp;
+      SIFT_DOWN(end);
+    }
+#undef SIFT_DOWN
+#undef BETTER
+    *k_used = used;
+    return SQLITE_OK;
   }
-
-  // Heapsort to produce ascending order.
-  for (int i = heap_size - 1; i > 0; i--) {
-    i32 tmp = out[0]; out[0] = out[i]; out[i] = tmp;
-    HEAP_SIFT_DOWN(0, i);
-  }
-
-  #undef HEAP_SIFT_UP
-  #undef HEAP_SIFT_DOWN
-
-  *k_used = heap_size;
-  return SQLITE_OK;
-
-#else
+legacy_min_idx:
+#endif
   // Original: O(n*k) repeated linear scan with bitmap.
   bitmap_clear(bTaken, n);
 
@@ -6597,7 +6816,7 @@ int min_idx(const f32 *distances, i32 n, u8 *candidates, i32 *out, i32 k,
   }
   *k_used = k;
   return SQLITE_OK;
-#endif
+
 }
 
 int vec0_get_metadata_text_long_value(
@@ -7266,6 +7485,16 @@ int vec0Filter_knn_chunks_iter(vec0_vtab *p, sqlite3_stmt *stmtChunks,
   u8 *bmMetadata = NULL;            // memory: chunk_size / 8
   //                        // total: a lot???
 
+  f32 *halfQuery = NULL;
+  f32 halfQueryNorm = 0;
+#if defined(SQLITE_VEC_ENABLE_AVX) && SQLITE_VEC_EXACT_SIMD
+  f32 queryNorm = vector_column->element_type == SQLITE_VEC_ELEMENT_TYPE_FLOAT32 &&
+                  vector_column->distance_metric == VEC0_DISTANCE_METRIC_COSINE
+                  ? vec_query_norm(queryVector, vector_column->dimensions) : 0;
+#endif
+  vec_half_distance_fn halfDistance = vec_half_kernel();
+  sqlite3_blob *metadataBlobs[VEC0_MAX_METADATA_COLUMNS] = {0};
+
   // 6 * (k * 4) + (k * 2) + (chunk_size / 8) + (chunk_size * dimensions * 4)
 
   topk_rowids = sqlite3_malloc(k * sizeof(i64));
@@ -7295,6 +7524,14 @@ int vec0Filter_knn_chunks_iter(vec0_vtab *p, sqlite3_stmt *stmtChunks,
     goto cleanup;
   }
   memset(tmp_topk_distances, 0, k * sizeof(f32));
+
+  if (vector_column->element_type == SQLITE_VEC_ELEMENT_TYPE_FLOAT16) {
+    halfQuery = sqlite3_malloc64(vector_column->dimensions * sizeof(f32));
+    if (!halfQuery) { rc = SQLITE_NOMEM; goto cleanup; }
+    vec_half_expand(queryVector, halfQuery, vector_column->dimensions);
+    if (vector_column->distance_metric == VEC0_DISTANCE_METRIC_COSINE)
+      halfQueryNorm = vec_query_norm(halfQuery, vector_column->dimensions);
+  }
 
   i64 k_used = 0;
   i64 baseVectorsSize = p->chunk_size * vector_column_byte_size(*vector_column);
@@ -7333,9 +7570,6 @@ int vec0Filter_knn_chunks_iter(vec0_vtab *p, sqlite3_stmt *stmtChunks,
     rc = SQLITE_NOMEM;
     goto cleanup;
   }
-
-  sqlite3_blob * metadataBlobs[VEC0_MAX_METADATA_COLUMNS];
-  memset(metadataBlobs, 0, sizeof(sqlite3_blob*) * VEC0_MAX_METADATA_COLUMNS);
 
   bmMetadata = bitmap_new(p->chunk_size);
   if(!bmMetadata) {
@@ -7400,6 +7634,7 @@ int vec0Filter_knn_chunks_iter(vec0_vtab *p, sqlite3_stmt *stmtChunks,
       goto cleanup;
     }
 
+#if !SQLITE_VEC_FILTER_FIRST
     // open the vector chunk blob for the current chunk
     rc = sqlite3_blob_open(p->db, p->schemaName,
                            p->shadowVectorChunksNames[vectorColumnIdx],
@@ -7430,6 +7665,8 @@ int vec0Filter_knn_chunks_iter(vec0_vtab *p, sqlite3_stmt *stmtChunks,
       rc = SQLITE_ERROR;
       goto cleanup;
     }
+
+#endif
 
     bitmap_copy(b, chunkValidity, p->chunk_size);
     if (arrayRowidsIn) {
@@ -7478,6 +7715,43 @@ int vec0Filter_knn_chunks_iter(vec0_vtab *p, sqlite3_stmt *stmtChunks,
     }
 
 
+#if SQLITE_VEC_FILTER_FIRST
+    int anyCandidates = 0;
+    for (int i = 0; i < p->chunk_size / CHAR_BIT; i++) anyCandidates |= b[i];
+    if (!anyCandidates) continue;
+    // open the vector chunk blob for the current chunk
+    rc = sqlite3_blob_open(p->db, p->schemaName,
+                           p->shadowVectorChunksNames[vectorColumnIdx],
+                           "vectors", chunk_id, 0, &blobVectors);
+    if (rc != SQLITE_OK) {
+      vtab_set_error(&p->base, "could not open vectors blob for chunk %lld",
+                     chunk_id);
+      rc = SQLITE_ERROR;
+      goto cleanup;
+    }
+
+    i64 currentBaseVectorsSize = sqlite3_blob_bytes(blobVectors);
+    i64 expectedBaseVectorsSize =
+        p->chunk_size * vector_column_byte_size(*vector_column);
+    if (currentBaseVectorsSize != expectedBaseVectorsSize) {
+      // IMP: V16465_00535
+      vtab_set_error(
+          &p->base,
+          "vectors blob size doesn't match - expected %lld, found %lld",
+          expectedBaseVectorsSize, currentBaseVectorsSize);
+      rc = SQLITE_ERROR;
+      goto cleanup;
+    }
+    rc = sqlite3_blob_read(blobVectors, baseVectors, currentBaseVectorsSize, 0);
+
+    if (rc != SQLITE_OK) {
+      vtab_set_error(&p->base, "vectors blob read error for %lld", chunk_id);
+      rc = SQLITE_ERROR;
+      goto cleanup;
+    }
+
+#endif
+
     for (int i = 0; i < p->chunk_size; i++) {
       if (!bitmap_get(b, i)) {
         continue;
@@ -7485,6 +7759,11 @@ int vec0Filter_knn_chunks_iter(vec0_vtab *p, sqlite3_stmt *stmtChunks,
 
       f32 result;
       switch (vector_column->element_type) {
+      case SQLITE_VEC_ELEMENT_TYPE_FLOAT16:
+        result = halfDistance((const u8 *)baseVectors + i * vector_column->dimensions * 2,
+                              halfQuery, vector_column->dimensions,
+                              vector_column->distance_metric, halfQueryNorm);
+        break;
       case SQLITE_VEC_ELEMENT_TYPE_FLOAT32: {
         const f32 *base_i =
             ((f32 *)baseVectors) + (i * vector_column->dimensions);
@@ -7500,6 +7779,12 @@ int vec0Filter_knn_chunks_iter(vec0_vtab *p, sqlite3_stmt *stmtChunks,
           break;
         }
         case VEC0_DISTANCE_METRIC_COSINE: {
+#if defined(SQLITE_VEC_ENABLE_AVX) && SQLITE_VEC_EXACT_SIMD
+          if (vector_column->dimensions >= 8)
+            result = vec_avx_distance(base_i, queryVector, vector_column->dimensions,
+                                      VEC0_DISTANCE_METRIC_COSINE, queryNorm);
+          else
+#endif
           result = distance_cosine_float(base_i, (f32 *)queryVector,
                                          &vector_column->dimensions);
           break;
@@ -7628,6 +7913,7 @@ cleanup:
   sqlite3_free(b);
   sqlite3_free(bTaken);
   sqlite3_free(bmRowids);
+  sqlite3_free(halfQuery);
   sqlite3_free(baseVectors);
   sqlite3_free(chunk_distances);
   sqlite3_free(bmMetadata);
@@ -7859,7 +8145,7 @@ int vec0Filter_knn(vec0_cursor *pCur, vec0_vtab *p, int idxNum,
   assert(k_idx >= 0);
 
   // make sure the query vector matches the vector column (type dimensions etc.)
-  rc = vector_from_value(argv[query_idx], &queryVector, &dimensions, &elementType,
+  rc = vector_from_column_value(argv[query_idx], vector_column->element_type, &queryVector, &dimensions, &elementType,
                          &queryVectorCleanup, &pzError);
 
   if (rc != SQLITE_OK) {
@@ -7889,6 +8175,11 @@ int vec0Filter_knn(vec0_cursor *pCur, vec0_vtab *p, int idxNum,
         vector_column->dimensions, dimensions);
     rc = SQLITE_ERROR;
     goto cleanup;
+  }
+
+  if (elementType == SQLITE_VEC_ELEMENT_TYPE_FLOAT16) {
+    const char *error = vec_half_validate(queryVector, dimensions, vector_column->distance_metric);
+    if (error) { vtab_set_error(&p->base, "%s", error); rc = SQLITE_ERROR; goto cleanup; }
   }
 
   i64 k = sqlite3_value_int64(argv[k_idx]);
@@ -8850,6 +9141,10 @@ vec0_write_vector_to_vector_blob(sqlite3_blob *blobVectors, i64 chunk_offset,
   int offset;
 
   switch (element_type) {
+  case SQLITE_VEC_ELEMENT_TYPE_FLOAT16:
+    n = dimensions * 2;
+    offset = chunk_offset * n;
+    break;
   case SQLITE_VEC_ELEMENT_TYPE_FLOAT32:
     n = dimensions * sizeof(f32);
     offset = chunk_offset * dimensions * sizeof(f32);
@@ -9231,7 +9526,7 @@ int vec0Update_Insert(sqlite3_vtab *pVTab, int argc, sqlite3_value **argv,
 
     char *pzError;
     enum VectorElementType elementType;
-    rc = vector_from_value(valueVector, &vectorDatas[vector_column_idx], &dimensions,
+    rc = vector_from_column_value(valueVector, p->vector_columns[vector_column_idx].element_type, &vectorDatas[vector_column_idx], &dimensions,
                            &elementType, &cleanups[vector_column_idx], &pzError);
     if (rc != SQLITE_OK) {
       // IMP: V06519_23358
@@ -9266,6 +9561,14 @@ int vec0Update_Insert(sqlite3_vtab *pVTab, int argc, sqlite3_value **argv,
           p->vector_columns[vector_column_idx].dimensions, dimensions);
       rc = SQLITE_ERROR;
       goto cleanup;
+    }
+  }
+
+  for (int i = 0; i < p->numVectorColumns; i++) {
+    if (p->vector_columns[i].element_type == SQLITE_VEC_ELEMENT_TYPE_FLOAT16) {
+      const char *error = vec_half_validate(vectorDatas[i], p->vector_columns[i].dimensions,
+                                             p->vector_columns[i].distance_metric);
+      if (error) { vtab_set_error(pVTab, "%s", error); rc = SQLITE_ERROR; goto cleanup; }
     }
   }
 
@@ -10026,7 +10329,7 @@ int vec0Update_UpdateVectorColumn(vec0_vtab *p, i64 chunk_id, i64 chunk_offset,
   void *vector;
   vector_cleanup cleanup = vector_cleanup_noop;
   // https://github.com/asg017/sqlite-vec/issues/53
-  rc = vector_from_value(valueVector, &vector, &dimensions, &elementType,
+  rc = vector_from_column_value(valueVector, p->vector_columns[i].element_type, &vector, &dimensions, &elementType,
                          &cleanup, &pzError);
   if (rc != SQLITE_OK) {
     // IMP: V15203_32042
@@ -10058,6 +10361,11 @@ int vec0Update_UpdateVectorColumn(vec0_vtab *p, i64 chunk_id, i64 chunk_offset,
         p->vector_columns[i].dimensions, dimensions);
     rc = SQLITE_ERROR;
     goto cleanup;
+  }
+
+  if (elementType == SQLITE_VEC_ELEMENT_TYPE_FLOAT16) {
+    const char *error = vec_half_validate(vector, dimensions, p->vector_columns[i].distance_metric);
+    if (error) { vtab_set_error(&p->base, "%s", error); rc = SQLITE_ERROR; goto cleanup; }
   }
 
 #if SQLITE_VEC_ENABLE_RESCORE
@@ -10629,6 +10937,18 @@ static sqlite3_module vec0Module = {
   "Commit: " SQLITE_VEC_SOURCE "\n"                                            \
   "Build flags: " SQLITE_VEC_DEBUG_BUILD
 
+static void vec_debug(sqlite3_context *context, int argc, sqlite3_value **argv) {
+  UNUSED_PARAMETER(argc);
+  UNUSED_PARAMETER(argv);
+  const char *kernel = "scalar";
+#ifdef VEC_HAVE_F16C
+  if (vec_half_kernel() == vec_half_distance_f16c) kernel = "f16c";
+#endif
+  char *text = sqlite3_mprintf(SQLITE_VEC_DEBUG_STRING "\nFloat16 kernel: %s; accumulation: fp32; exact_simd=%d heap=%d filter_first=%d", kernel, SQLITE_VEC_EXACT_SIMD, SQLITE_VEC_EXACT_HEAP, SQLITE_VEC_FILTER_FIRST);
+  if (!text) { sqlite3_result_error_nomem(context); return; }
+  sqlite3_result_text(context, text, -1, sqlite3_free);
+}
+
 SQLITE_VEC_API int sqlite3_vec_init(sqlite3 *db, char **pzErrMsg,
                                     const sqlite3_api_routines *pApi) {
 #ifndef SQLITE_CORE
@@ -10645,7 +10965,7 @@ SQLITE_VEC_API int sqlite3_vec_init(sqlite3 *db, char **pzErrMsg,
     return rc;
   }
   rc = sqlite3_create_function_v2(db, "vec_debug", 0, DEFAULT_FLAGS,
-                                  SQLITE_VEC_DEBUG_STRING, _static_text_func,
+                                  NULL, vec_debug,
                                   NULL, NULL, NULL);
   if (rc != SQLITE_OK) {
     return rc;
@@ -10664,13 +10984,14 @@ SQLITE_VEC_API int sqlite3_vec_init(sqlite3 *db, char **pzErrMsg,
     {"vec_distance_hamming",vec_distance_hamming, 2, DEFAULT_FLAGS | SQLITE_SUBTYPE,                         },
     {"vec_distance_cosine", vec_distance_cosine,  2, DEFAULT_FLAGS | SQLITE_SUBTYPE,                         },
     {"vec_length",          vec_length,           1, DEFAULT_FLAGS | SQLITE_SUBTYPE,                         },
-    {"vec_type",           vec_type,           1, DEFAULT_FLAGS,                         },
+    {"vec_type",           vec_type,           1, DEFAULT_FLAGS | SQLITE_SUBTYPE,                         },
     {"vec_to_json",         vec_to_json,          1, DEFAULT_FLAGS | SQLITE_SUBTYPE | SQLITE_RESULT_SUBTYPE, },
     {"vec_add",             vec_add,              2, DEFAULT_FLAGS | SQLITE_SUBTYPE | SQLITE_RESULT_SUBTYPE, },
     {"vec_sub",             vec_sub,              2, DEFAULT_FLAGS | SQLITE_SUBTYPE | SQLITE_RESULT_SUBTYPE, },
     {"vec_slice",           vec_slice,            3, DEFAULT_FLAGS | SQLITE_SUBTYPE | SQLITE_RESULT_SUBTYPE, },
     {"vec_normalize",       vec_normalize,        1, DEFAULT_FLAGS | SQLITE_SUBTYPE | SQLITE_RESULT_SUBTYPE, },
     {"vec_f32",             vec_f32,              1, DEFAULT_FLAGS | SQLITE_SUBTYPE | SQLITE_RESULT_SUBTYPE, },
+    {"vec_f16",             vec_f16,              1, DEFAULT_FLAGS | SQLITE_SUBTYPE | SQLITE_RESULT_SUBTYPE, },
     {"vec_bit",             vec_bit,              1, DEFAULT_FLAGS | SQLITE_SUBTYPE | SQLITE_RESULT_SUBTYPE, },
     {"vec_int8",            vec_int8,             1, DEFAULT_FLAGS | SQLITE_SUBTYPE | SQLITE_RESULT_SUBTYPE, },
     {"vec_quantize_int8",     vec_quantize_int8,      2, DEFAULT_FLAGS | SQLITE_SUBTYPE | SQLITE_RESULT_SUBTYPE, },
@@ -10712,5 +11033,3 @@ SQLITE_VEC_API int sqlite3_vec_init(sqlite3 *db, char **pzErrMsg,
 
   return SQLITE_OK;
 }
-
-

@@ -12,7 +12,7 @@ anywhere! A successor to [`sqlite-vss`](https://github.com/asg017/sqlite-vss)
 
 <!-- deno-fmt-ignore-end -->
 
-- Store and query float, int8, and binary vectors in `vec0` virtual tables
+- Store and query float32, float16, int8, and binary vectors in `vec0` virtual tables
 - Written in pure C, no dependencies, runs anywhere SQLite runs
   (Linux/MacOS/Windows, in the browser with WASM, Raspberry Pis, etc.)
 - Store non-vector data in metadata, auxiliary, or partition key columns

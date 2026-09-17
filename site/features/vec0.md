@@ -1,5 +1,53 @@
 # `vec0` Virtual Table
 
+## Float16 embeddings
+
+Declare `float16[N]` or `f16[N]` to store IEEE binary16 embeddings. The existing
+`float[N]` and `f32[N]` declarations continue to store float32 values.
+
+```sql
+create virtual table embeddings using vec0(
+  embedding float16[3] distance_metric=cosine
+);
+insert into embeddings(rowid, embedding) values (1, vec_f16('[1, 2, 3]'));
+select rowid, distance, embedding
+from embeddings
+where embedding match vec_f16('[3, 2, 1]') and k=10
+order by distance;
+select vec_f32(embedding) from embeddings where rowid=1;
+```
+
+Selected embeddings are raw half-precision blobs, including in KNN results.
+Point reads, full scans, updates, deletes, transactions, partitions, and metadata
+filters work as with float32 columns. Raw blobs bound to a declared float16
+column are interpreted using that column's type. This also handles SQLite
+discarding expression subtypes while materializing UPDATE values. Standalone
+scalar functions need `vec_f16(?)` to identify raw half blobs; subtype information
+does not persist in ordinary SQLite tables or through every SQL expression.
+
+In Python, insert `numpy.asarray(values, dtype=numpy.float16).tobytes()` and read
+with `numpy.frombuffer(blob, dtype=numpy.float16)`. Convert float32 blobs explicitly
+with `vec_f16(vec_f32(?))`; passing their bytes directly to a float16 column is
+not a conversion. JSON input likewise uses `vec_f16(...)`.
+
+Float16 supports exact flat search with L2 (default), L1, and cosine distance,
+with float32 accumulation. ANN/rescore configurations do not accept float16.
+On supported x86 builds the scan widens stored half values in SIMD registers
+using F16C; other builds use portable scalar conversion. `vec_debug()` reports
+the selected half kernel and accumulation precision. All candidates satisfying
+the filters are considered; quantization, rather than indexing, can change the
+ranking relative to float32 inputs.
+
+Existing databases need no migration. To convert a float32 table, create a new
+float16 table and copy explicitly; keep the original until the conversion is
+validated:
+
+```sql
+create virtual table embeddings_half using vec0(embedding float16[768]);
+insert into embeddings_half(rowid, embedding)
+select rowid, vec_f16(vec_f32(embedding)) from embeddings_float;
+```
+
 ## Metadata in `vec0` Virtual Tables {#vec0_metadata}
 
 There are three ways to store non-vector columns in `vec0` virtual tables:

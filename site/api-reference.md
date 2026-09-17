@@ -16,13 +16,43 @@ sqlite-vec is pre-v1, so expect breaking changes.
 
 SQL functions that "construct" vectors with different element types.
 
-Currently, only `float32`, `int8`, and `bit` vectors are supported.
+`float32`, `float16`, `int8`, and `bit` vectors are supported.
+
+### `vec_f16(vector)` {#vec_f16}
+
+Constructs an IEEE binary16 vector with two bytes per element and subtype `226`.
+A nonempty raw BLOB must have an even byte length and is interpreted as half
+precision, using native byte order just like existing float32 blobs. JSON text
+and explicitly typed `vec_f32(...)` inputs are converted with round-to-nearest,
+ties-to-even. An untyped BLOB is **not** assumed to contain float32 values.
+
+```sql
+select vec_f16('[1, 2]');                     -- X'003C0040' on little-endian hosts
+select vec_f16(vec_f32('[1, 2]'));            -- explicit float32 -> float16
+select vec_f32(vec_f16('[1, 2]'));            -- explicit float16 -> float32
+select vec_type(vec_f16('[1, 2]'));           -- float16
+select vec_length(vec_f16('[1, 2]'));         -- 2
+select vec_to_json(vec_f16('[1, 2]'));        -- [1.000000,2.000000]
+```
+
+Float16 supports `vec_length`, `vec_type`, `vec_to_json`, `vec_each`, and the L1,
+L2, and cosine distance functions. Both distance arguments must have the same
+type. Distance arithmetic accumulates in float32. Arithmetic, slicing,
+normalization, and quantization functions require an explicit `vec_f32(...)`
+conversion first; unsupported inputs raise errors.
+
+Raw constructors and widening preserve IEEE infinities and NaNs; conversion of
+finite float32 values outside the binary16 range can produce infinity. Float16
+table insertion/update and distance evaluation reject nonfinite values. Cosine
+also rejects zero-norm vectors. Float16 rounding can change nearest-neighbor
+rankings relative to the original float32 values.
 
 
 ### `vec_f32(vector)` {#vec_f32}
 
 Creates a float vector from a BLOB or JSON text. If a BLOB is provided,
 the length must be divisible by 4, as a float takes up 4 bytes of space each.
+An explicitly typed `vec_f16(...)` input is widened to float32 instead.
 
 The returned value is a BLOB with 4 bytes per element, with a special [subtype](https://www.sqlite.org/c3ref/result_subtype.html)
 of `223`.
@@ -604,4 +634,3 @@ Build flags: avx '
 ## Entrypoints {#entrypoints} 
 
 All the named entrypoints that load in different `sqlite-vec` functions and options.
-
