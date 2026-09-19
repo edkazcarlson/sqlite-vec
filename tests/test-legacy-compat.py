@@ -28,7 +28,7 @@ def legacy_db(tmp_path):
     db = sqlite3.connect(db_path)
     db.row_factory = sqlite3.Row
     db.enable_load_extension(True)
-    db.load_extension("dist/vec0")
+    db.load_extension(os.environ.get("VEC_TEST_EXTENSION", "dist/vec0"), entrypoint="sqlite3_vec_init")
     return db
 
 

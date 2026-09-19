@@ -1,4 +1,5 @@
 """Tests for the rescore index feature in sqlite-vec."""
+import os
 import struct
 import sqlite3
 import pytest
@@ -11,7 +12,7 @@ def db():
     db = sqlite3.connect(":memory:")
     db.row_factory = sqlite3.Row
     db.enable_load_extension(True)
-    db.load_extension("dist/vec0")
+    db.load_extension(os.environ.get("VEC_TEST_EXTENSION", "dist/vec0"), entrypoint="sqlite3_vec_init")
     db.enable_load_extension(False)
     return db
 

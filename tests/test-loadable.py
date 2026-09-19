@@ -1,5 +1,6 @@
 # ruff: noqa: E731
 
+import os
 import re
 from typing import List
 import sqlite3
@@ -12,7 +13,7 @@ import json
 import numpy as np
 from math import isclose
 
-EXT_PATH = "./dist/vec0"
+EXT_PATH = os.environ.get("VEC_TEST_EXTENSION", "./dist/vec0")
 
 SUPPORTS_SUBTYPE = sqlite3.sqlite_version_info[1] > 38
 SUPPORTS_DROP_COLUMN = sqlite3.sqlite_version_info[1] >= 35
@@ -62,7 +63,7 @@ def connect(ext, path=":memory:", extra_entrypoint=None):
     db.execute("create temp table base_modules as select name from pragma_module_list")
 
     db.enable_load_extension(True)
-    db.load_extension(ext)
+    db.load_extension(ext, entrypoint="sqlite3_vec_init")
 
     if extra_entrypoint:
         db.execute("select load_extension(?, ?)", [ext, extra_entrypoint])

@@ -1,5 +1,8 @@
 # Exact-search benchmark results
 
+For the subsequent real-data indexing and structural experiments, see the
+[structural report](STRUCTURAL-REPORT.md) and [reproduction guide](STRUCTURAL.md).
+
 Collected September 16–17, 2026 on this machine: AMD Ryzen 9 9900X, 30 GiB RAM,
 Linux x86-64. CPU only; no ANN index, GPU, or external embedding model. Raw
 reports contain the full hardware, compiler, SQLite/Python/NumPy, build, and

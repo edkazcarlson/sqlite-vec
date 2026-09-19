@@ -137,6 +137,7 @@ struct VectorColumnDefinition {
 #endif
   struct Vec0IvfConfig ivf;
   struct Vec0DiskannConfig diskann;
+  int exact_va;
 };
 
 int vec0_parse_vector_column(const char *source, int source_length,

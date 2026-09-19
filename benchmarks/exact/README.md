@@ -1,5 +1,10 @@
 # Exact-search benchmark
 
+The follow-up [structural experiments](STRUCTURAL.md) test exact pruning indexes,
+alternative memory layouts and SQLite access paths on real embeddings. See their
+[results and tradeoffs](STRUCTURAL-REPORT.md). That runner also requires PyArrow,
+which is declared in this project's dependencies.
+
 Run from the repository root. The tool needs only NumPy and Python's SQLite
 bindings; `uv` installs the declared dependencies. Missing extensions, packages,
 or requested capabilities fail explicitly. No ANN indexes or GPU are used.

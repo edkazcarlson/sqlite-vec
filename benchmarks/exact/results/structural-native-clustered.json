@@ -1,0 +1,3672 @@
+{
+  "format": 1,
+  "case": {
+    "action": "native",
+    "data": "/home/edward/Desktop/sqlite-vec/benchmarks/exact/results/work/cohere",
+    "dataset": "clustered",
+    "rows": 100000,
+    "dims": 768,
+    "queries": 20,
+    "repetitions": 3,
+    "k": 10,
+    "dtype": "float32",
+    "metric": "l2",
+    "storage": "file",
+    "modes": "0,1,2,3,4,6",
+    "extensions": [
+      "/home/edward/Desktop/sqlite-vec/benchmarks/exact/results/builds/structural-baseline/vec0.so",
+      "/home/edward/Desktop/sqlite-vec/benchmarks/exact/results/builds/structural-sparse/vec0.so"
+    ],
+    "output": "benchmarks/exact/results/structural-native-clustered.json",
+    "instrument": false
+  },
+  "machine": {
+    "system": "Linux",
+    "node": "edward-systemproductname",
+    "release": "7.0.0-31-generic",
+    "version": "#31-Ubuntu SMP PREEMPT_DYNAMIC Sat Aug  1 04:26:38 UTC 2026",
+    "machine": "x86_64",
+    "processor": ""
+  },
+  "sqlite": "3.50.4",
+  "commit": "c399333a698fe529f93b9c9a34746cd9cdc2aa87",
+  "source_sha256": {
+    "benchmarks/exact/structural.py": "408d9c1fc0433a9f5df8b6e0d13443c49330a5bf55f9b85a662e879e5f0c55d4",
+    "benchmarks/exact/structural.c": "de7a8c6d69894484602d0433a26ee474c6562dc4c637953096f8f9d4c5f2b486",
+    "sqlite-vec.c": "ab1b0d35512e0de48756a66a5ec4a8c58eed96be0f6b3864efd778419e99c993"
+  },
+  "threads": {
+    "OPENBLAS_NUM_THREADS": "1",
+    "OMP_NUM_THREADS": "1"
+  },
+  "command": [
+    "cc",
+    "-O3",
+    "-fPIC",
+    "-shared",
+    "-mavx2",
+    "-mf16c",
+    "-DSQLITE_VEC_ENABLE_AVX",
+    "-Ivendor",
+    "benchmarks/exact/structural.c",
+    "-lm",
+    "-o",
+    "/home/edward/Desktop/sqlite-vec/benchmarks/exact/results/builds/structural.so"
+  ],
+  "binary_sha256": "9d42148ef5b6237ddceb1b073305ff0c80d18f7ca43674dfb2045279e486a244",
+  "dimensions": 768,
+  "builds": {
+    "two-pass": {
+      "seconds": 3.522601036820561e-05
+    },
+    "partial-l2": {
+      "seconds": 8.194998372346163e-06
+    },
+    "va8": {
+      "seconds": 0.3958342499972787
+    },
+    "cells": {
+      "seconds": 0.11518415200407617
+    },
+    "tile8": {
+      "seconds": 0.062475703001837246
+    },
+    "fused": {
+      "seconds": 2.4474997189827263e-05
+    }
+  },
+  "results": [
+    {
+      "variant": "two-pass",
+      "repetition": 0,
+      "kernel_only": false,
+      "samples_ms": [
+        6.76867,
+        6.349727,
+        6.200739,
+        6.093348,
+        6.091766,
+        6.133973,
+        6.058423,
+        6.202212,
+        6.10499,
+        6.061939,
+        6.154292,
+        6.103387,
+        6.170823,
+        6.107024,
+        6.047683,
+        6.035741,
+        6.125748,
+        6.094611,
+        6.195409,
+        6.056609
+      ],
+      "median_ms": 6.106007,
+      "p95_ms": 6.37067415,
+      "counters": [
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.0255875289440155,
+          "score_ms": 6.525764644145966,
+          "select_ms": 2.1487680077552795
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.01370145380497,
+          "score_ms": 6.315076410770416,
+          "select_ms": 2.1466621309518814
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.0157022029161453,
+          "score_ms": 6.471070617437363,
+          "select_ms": 2.1432804614305496
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.0167739540338516,
+          "score_ms": 6.41752889752388,
+          "select_ms": 2.144689291715622
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.0063756704330444,
+          "score_ms": 6.410083472728729,
+          "select_ms": 2.1399241536855698
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.01409250497818,
+          "score_ms": 6.19120429456234,
+          "select_ms": 2.1402579993009567
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.007088541984558,
+          "score_ms": 6.371289327740669,
+          "select_ms": 2.1350994557142258
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.0108469426631927,
+          "score_ms": 6.490832045674324,
+          "select_ms": 2.482718214392662
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.011612892150879,
+          "score_ms": 6.4141543209552765,
+          "select_ms": 2.140704706311226
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.0181752145290375,
+          "score_ms": 6.185791566967964,
+          "select_ms": 2.146993950009346
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.0070265233516693,
+          "score_ms": 6.328516557812691,
+          "select_ms": 2.1347345411777496
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.009179964661598,
+          "score_ms": 6.356746435165405,
+          "select_ms": 2.138251379132271
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.091138407588005,
+          "score_ms": 6.579312205314636,
+          "select_ms": 2.20366071164608
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.009597137570381,
+          "score_ms": 6.309148743748665,
+          "select_ms": 2.1455138474702835
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.010306552052498,
+          "score_ms": 6.33714085817337,
+          "select_ms": 2.1453906893730164
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.0131922364234924,
+          "score_ms": 6.338453054428101,
+          "select_ms": 2.1397572457790375
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.007373958826065,
+          "score_ms": 6.3792544901371,
+          "select_ms": 2.1338468343019485
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.010479152202606,
+          "score_ms": 6.209205344319344,
+          "select_ms": 2.1341034173965454
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.010243758559227,
+          "score_ms": 6.484888091683388,
+          "select_ms": 2.1390741169452667
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.0216413885354996,
+          "score_ms": 6.442662090063095,
+          "select_ms": 2.154159337282181
+        }
+      ],
+      "min_overlap": 1.0,
+      "max_score_error": 0.0
+    },
+    {
+      "variant": "partial-l2",
+      "repetition": 0,
+      "kernel_only": false,
+      "samples_ms": [
+        11.031117,
+        10.796718,
+        10.960544,
+        10.972277,
+        11.286013,
+        11.072304,
+        10.884733,
+        10.880114,
+        11.777111,
+        11.137776,
+        11.003926,
+        11.138708,
+        11.007662,
+        11.170647,
+        11.168062,
+        11.180626,
+        11.372033,
+        11.202667,
+        10.743399,
+        11.21509
+      ],
+      "median_ms": 11.10504,
+      "p95_ms": 11.3922869,
+      "counters": [
+        {
+          "full": 122,
+          "coordinates": 5505504,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 374784,
+          "bound_ms": 14.676578164100647,
+          "score_ms": 0.007842928171157837,
+          "select_ms": 0.0036470741033554077
+        },
+        {
+          "full": 122,
+          "coordinates": 5506400,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 374784,
+          "bound_ms": 14.25056904554367,
+          "score_ms": 0.008676081895828247,
+          "select_ms": 0.003345862030982971
+        },
+        {
+          "full": 106,
+          "coordinates": 5524128,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 325632,
+          "bound_ms": 14.720769003033638,
+          "score_ms": 0.006673023104667664,
+          "select_ms": 0.0030139684677124023
+        },
+        {
+          "full": 105,
+          "coordinates": 5481888,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 322560,
+          "bound_ms": 13.905955016613007,
+          "score_ms": 0.006622090935707092,
+          "select_ms": 0.002825900912284851
+        },
+        {
+          "full": 97,
+          "coordinates": 5515776,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 297984,
+          "bound_ms": 15.251265063881874,
+          "score_ms": 0.006355911493301392,
+          "select_ms": 0.0026630908250808716
+        },
+        {
+          "full": 108,
+          "coordinates": 5485728,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 331776,
+          "bound_ms": 14.55088321864605,
+          "score_ms": 0.007069915533065796,
+          "select_ms": 0.0030440092086791992
+        },
+        {
+          "full": 123,
+          "coordinates": 5513824,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 377856,
+          "bound_ms": 14.439355850219727,
+          "score_ms": 0.007547944784164429,
+          "select_ms": 0.003350168466567993
+        },
+        {
+          "full": 108,
+          "coordinates": 5506304,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 331776,
+          "bound_ms": 14.687264308333397,
+          "score_ms": 0.0067648738622665405,
+          "select_ms": 0.002857103943824768
+        },
+        {
+          "full": 108,
+          "coordinates": 5496704,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 331776,
+          "bound_ms": 14.448288291692734,
+          "score_ms": 0.0068800002336502075,
+          "select_ms": 0.003045991063117981
+        },
+        {
+          "full": 109,
+          "coordinates": 5492544,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 334848,
+          "bound_ms": 14.354959785938263,
+          "score_ms": 0.007123962044715881,
+          "select_ms": 0.0029019713401794434
+        },
+        {
+          "full": 124,
+          "coordinates": 5518112,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 380928,
+          "bound_ms": 14.697077319025993,
+          "score_ms": 0.00733301043510437,
+          "select_ms": 0.0035459697246551514
+        },
+        {
+          "full": 111,
+          "coordinates": 5516544,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 340992,
+          "bound_ms": 13.980985671281815,
+          "score_ms": 0.006755039095878601,
+          "select_ms": 0.0030449628829956055
+        },
+        {
+          "full": 120,
+          "coordinates": 5512768,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 368640,
+          "bound_ms": 14.474913001060486,
+          "score_ms": 0.007191002368927002,
+          "select_ms": 0.003168955445289612
+        },
+        {
+          "full": 124,
+          "coordinates": 5540864,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 380928,
+          "bound_ms": 14.34296764433384,
+          "score_ms": 0.007518023252487183,
+          "select_ms": 0.0033380836248397827
+        },
+        {
+          "full": 105,
+          "coordinates": 5541696,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 322560,
+          "bound_ms": 14.475550040602684,
+          "score_ms": 0.006479933857917786,
+          "select_ms": 0.0028939247131347656
+        },
+        {
+          "full": 108,
+          "coordinates": 5524640,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 331776,
+          "bound_ms": 14.385153383016586,
+          "score_ms": 0.008184075355529785,
+          "select_ms": 0.002956971526145935
+        },
+        {
+          "full": 112,
+          "coordinates": 5488512,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 344064,
+          "bound_ms": 14.750981241464615,
+          "score_ms": 0.006645947694778442,
+          "select_ms": 0.0030650049448013306
+        },
+        {
+          "full": 123,
+          "coordinates": 5517888,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 377856,
+          "bound_ms": 14.504022091627121,
+          "score_ms": 0.007164075970649719,
+          "select_ms": 0.003243878483772278
+        },
+        {
+          "full": 105,
+          "coordinates": 5503808,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 322560,
+          "bound_ms": 14.097635611891747,
+          "score_ms": 0.0062851011753082275,
+          "select_ms": 0.0027328580617904663
+        },
+        {
+          "full": 108,
+          "coordinates": 5523392,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 331776,
+          "bound_ms": 14.288365751504898,
+          "score_ms": 0.00688403844833374,
+          "select_ms": 0.0028990060091018677
+        }
+      ],
+      "min_overlap": 1.0,
+      "max_score_error": 0.0
+    },
+    {
+      "variant": "va8",
+      "repetition": 0,
+      "kernel_only": false,
+      "samples_ms": [
+        5.431481,
+        5.43102,
+        5.206841,
+        5.184109,
+        5.326505,
+        5.247317,
+        5.231848,
+        5.374624,
+        5.209085,
+        5.303662,
+        5.277353,
+        5.415892,
+        5.340852,
+        5.379393,
+        5.344338,
+        5.201722,
+        5.296068,
+        5.403929,
+        5.198185,
+        5.328147
+      ],
+      "median_ms": 5.3150835,
+      "p95_ms": 5.43104305,
+      "counters": [
+        {
+          "full": 3169,
+          "coordinates": 5692928,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9735168,
+          "bound_ms": 6.3369951993227005,
+          "score_ms": 0.672506183385849,
+          "select_ms": 0.06686800718307495
+        },
+        {
+          "full": 3177,
+          "coordinates": 5694944,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9759744,
+          "bound_ms": 6.295052602887154,
+          "score_ms": 0.6627339720726013,
+          "select_ms": 0.06643068790435791
+        },
+        {
+          "full": 3177,
+          "coordinates": 5696288,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9759744,
+          "bound_ms": 6.004297748208046,
+          "score_ms": 0.7121613323688507,
+          "select_ms": 0.06647734344005585
+        },
+        {
+          "full": 3175,
+          "coordinates": 5695328,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9753600,
+          "bound_ms": 6.034341350197792,
+          "score_ms": 0.6837584376335144,
+          "select_ms": 0.06614476442337036
+        },
+        {
+          "full": 3165,
+          "coordinates": 5692864,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9722880,
+          "bound_ms": 5.914339497685432,
+          "score_ms": 0.6785163879394531,
+          "select_ms": 0.06771242618560791
+        },
+        {
+          "full": 3175,
+          "coordinates": 5698080,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9753600,
+          "bound_ms": 6.044217213988304,
+          "score_ms": 0.6846490502357483,
+          "select_ms": 0.06630752980709076
+        },
+        {
+          "full": 3175,
+          "coordinates": 5698016,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9753600,
+          "bound_ms": 6.0964947789907455,
+          "score_ms": 0.6742861121892929,
+          "select_ms": 0.06656159460544586
+        },
+        {
+          "full": 3174,
+          "coordinates": 5702176,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9750528,
+          "bound_ms": 6.157771468162537,
+          "score_ms": 0.6646423041820526,
+          "select_ms": 0.06626592576503754
+        },
+        {
+          "full": 3183,
+          "coordinates": 5699200,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9778176,
+          "bound_ms": 5.995387926697731,
+          "score_ms": 0.709655225276947,
+          "select_ms": 0.06640450656414032
+        },
+        {
+          "full": 3172,
+          "coordinates": 5700576,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9744384,
+          "bound_ms": 6.140906065702438,
+          "score_ms": 0.6870861947536469,
+          "select_ms": 0.06629312038421631
+        },
+        {
+          "full": 3174,
+          "coordinates": 5700064,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9750528,
+          "bound_ms": 6.130235597491264,
+          "score_ms": 0.6959044635295868,
+          "select_ms": 0.06787072122097015
+        },
+        {
+          "full": 3178,
+          "coordinates": 5702208,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9762816,
+          "bound_ms": 6.189704462885857,
+          "score_ms": 0.6669887155294418,
+          "select_ms": 0.066419318318367
+        },
+        {
+          "full": 3177,
+          "coordinates": 5698304,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9759744,
+          "bound_ms": 6.249715581536293,
+          "score_ms": 0.6746481657028198,
+          "select_ms": 0.06635993719100952
+        },
+        {
+          "full": 3177,
+          "coordinates": 5701344,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9759744,
+          "bound_ms": 6.191850334405899,
+          "score_ms": 0.6730889230966568,
+          "select_ms": 0.06647983193397522
+        },
+        {
+          "full": 3175,
+          "coordinates": 5699712,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9753600,
+          "bound_ms": 6.139732390642166,
+          "score_ms": 0.6681604385375977,
+          "select_ms": 0.06609532237052917
+        },
+        {
+          "full": 3181,
+          "coordinates": 5707360,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9772032,
+          "bound_ms": 6.115620240569115,
+          "score_ms": 0.6958165615797043,
+          "select_ms": 0.06609374284744263
+        },
+        {
+          "full": 3167,
+          "coordinates": 5703776,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9729024,
+          "bound_ms": 6.171298190951347,
+          "score_ms": 0.6805572211742401,
+          "select_ms": 0.06613688170909882
+        },
+        {
+          "full": 3173,
+          "coordinates": 5706688,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9747456,
+          "bound_ms": 6.1817267537117,
+          "score_ms": 0.69258913397789,
+          "select_ms": 0.06673403084278107
+        },
+        {
+          "full": 3171,
+          "coordinates": 5702176,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9741312,
+          "bound_ms": 6.0635882169008255,
+          "score_ms": 0.6773008108139038,
+          "select_ms": 0.06591525673866272
+        },
+        {
+          "full": 3179,
+          "coordinates": 5706752,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9765888,
+          "bound_ms": 6.099533349275589,
+          "score_ms": 0.6994255930185318,
+          "select_ms": 0.06617087125778198
+        }
+      ],
+      "min_overlap": 1.0,
+      "max_score_error": 0.0
+    },
+    {
+      "variant": "cells",
+      "repetition": 0,
+      "kernel_only": false,
+      "samples_ms": [
+        0.983819,
+        0.464458,
+        3.275933,
+        0.96812,
+        0.492871,
+        3.148414,
+        0.471892,
+        0.477051,
+        0.4604,
+        0.485377,
+        0.494825,
+        0.536463,
+        0.4763,
+        0.460551,
+        1.494994,
+        3.187006,
+        0.475078,
+        3.17796,
+        0.478775,
+        0.504893
+      ],
+      "median_ms": 0.493848,
+      "p95_ms": 3.19145235,
+      "counters": [
+        {
+          "full": 6250,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 19200000,
+          "bound_ms": 0.12513676285743713,
+          "score_ms": 1.5923600643873215,
+          "select_ms": 0.1288398802280426
+        },
+        {
+          "full": 3125,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 9600000,
+          "bound_ms": 0.06248120963573456,
+          "score_ms": 0.5910287499427795,
+          "select_ms": 0.06465107202529907
+        },
+        {
+          "full": 21875,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 67200000,
+          "bound_ms": 0.4413190633058548,
+          "score_ms": 4.8597114980220795,
+          "select_ms": 0.4558212459087372
+        },
+        {
+          "full": 6250,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 19200000,
+          "bound_ms": 0.12715815007686615,
+          "score_ms": 1.5239479094743729,
+          "select_ms": 0.12955273687839508
+        },
+        {
+          "full": 3125,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 9600000,
+          "bound_ms": 0.06295304000377655,
+          "score_ms": 0.6810334920883179,
+          "select_ms": 0.06491494178771973
+        },
+        {
+          "full": 21875,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 67200000,
+          "bound_ms": 0.4432200938463211,
+          "score_ms": 5.544863790273666,
+          "select_ms": 0.4530905932188034
+        },
+        {
+          "full": 3125,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 9600000,
+          "bound_ms": 0.06345288455486298,
+          "score_ms": 0.7162138819694519,
+          "select_ms": 0.06544265151023865
+        },
+        {
+          "full": 3125,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 9600000,
+          "bound_ms": 0.06320442259311676,
+          "score_ms": 0.7112901955842972,
+          "select_ms": 0.06512275338172913
+        },
+        {
+          "full": 3125,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 9600000,
+          "bound_ms": 0.06322398781776428,
+          "score_ms": 0.6687883138656616,
+          "select_ms": 0.06517112255096436
+        },
+        {
+          "full": 3125,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 9600000,
+          "bound_ms": 0.06344982981681824,
+          "score_ms": 0.6833318620920181,
+          "select_ms": 0.06537134945392609
+        },
+        {
+          "full": 3125,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 9600000,
+          "bound_ms": 0.06338106095790863,
+          "score_ms": 0.62565478682518,
+          "select_ms": 0.06569945812225342
+        },
+        {
+          "full": 3125,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 9600000,
+          "bound_ms": 0.06270518898963928,
+          "score_ms": 0.6374779343605042,
+          "select_ms": 0.06460615992546082
+        },
+        {
+          "full": 3125,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 9600000,
+          "bound_ms": 0.06312909722328186,
+          "score_ms": 0.6536677777767181,
+          "select_ms": 0.06486797332763672
+        },
+        {
+          "full": 3125,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 9600000,
+          "bound_ms": 0.06349073350429535,
+          "score_ms": 0.6080217212438583,
+          "select_ms": 0.06548969447612762
+        },
+        {
+          "full": 9375,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 28800000,
+          "bound_ms": 0.19002386927604675,
+          "score_ms": 2.272705093026161,
+          "select_ms": 0.1950647085905075
+        },
+        {
+          "full": 21875,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 67200000,
+          "bound_ms": 0.44411394000053406,
+          "score_ms": 5.045383170247078,
+          "select_ms": 0.45445430278778076
+        },
+        {
+          "full": 3125,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 9600000,
+          "bound_ms": 0.06558454036712646,
+          "score_ms": 0.564370796084404,
+          "select_ms": 0.06489957869052887
+        },
+        {
+          "full": 21875,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 67200000,
+          "bound_ms": 0.4497629851102829,
+          "score_ms": 4.789423540234566,
+          "select_ms": 0.45226480066776276
+        },
+        {
+          "full": 3125,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 9600000,
+          "bound_ms": 0.06283298134803772,
+          "score_ms": 0.5913387686014175,
+          "select_ms": 0.06486411392688751
+        },
+        {
+          "full": 3125,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 9600000,
+          "bound_ms": 0.06329602003097534,
+          "score_ms": 0.689117819070816,
+          "select_ms": 0.0654684454202652
+        }
+      ],
+      "min_overlap": 1.0,
+      "max_score_error": 0.0
+    },
+    {
+      "variant": "tile8",
+      "repetition": 0,
+      "kernel_only": true,
+      "samples_ms": [
+        5.846406,
+        5.9822,
+        5.975017,
+        5.942656,
+        6.193916,
+        6.550783,
+        6.589436,
+        6.478538,
+        6.633207,
+        7.05188,
+        6.564809,
+        6.829053,
+        7.19098,
+        6.789789,
+        6.791493,
+        6.961701,
+        6.513563,
+        6.221528,
+        6.168829,
+        6.001747
+      ],
+      "median_ms": 6.532173,
+      "p95_ms": 7.058835,
+      "counters": [],
+      "min_overlap": 1.0,
+      "max_score_error": 2.86102294921875e-06
+    },
+    {
+      "variant": "fused",
+      "repetition": 0,
+      "kernel_only": false,
+      "samples_ms": [
+        5.920996,
+        6.131109,
+        5.980006,
+        5.974335,
+        5.896781,
+        5.977382,
+        5.97158,
+        6.151547,
+        5.919323,
+        5.932698,
+        5.945101,
+        5.92832,
+        6.1745,
+        5.975739,
+        5.924292,
+        5.908774,
+        5.969156,
+        6.012678,
+        6.076958,
+        5.951623
+      ],
+      "median_ms": 5.970368000000001,
+      "p95_ms": 6.15269465,
+      "counters": [
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.0174983888864517,
+          "score_ms": 6.381428211927414,
+          "select_ms": 2.060162588953972
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.0119859129190445,
+          "score_ms": 6.143370062112808,
+          "select_ms": 2.0495582073926926
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.0121291428804398,
+          "score_ms": 6.329454556107521,
+          "select_ms": 2.0478953272104263
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.006929248571396,
+          "score_ms": 6.387484058737755,
+          "select_ms": 2.048020139336586
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.0125023871660233,
+          "score_ms": 6.370244786143303,
+          "select_ms": 2.051032602787018
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.014716625213623,
+          "score_ms": 6.194537028670311,
+          "select_ms": 2.0492973625659943
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.019281789660454,
+          "score_ms": 6.417476013302803,
+          "select_ms": 2.0615548342466354
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.015224516391754,
+          "score_ms": 6.432921782135963,
+          "select_ms": 2.057301491498947
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.029936820268631,
+          "score_ms": 6.5402258187532425,
+          "select_ms": 2.071726307272911
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.0383628010749817,
+          "score_ms": 6.443149074912071,
+          "select_ms": 2.077174872159958
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.0404525995254517,
+          "score_ms": 6.587029039859772,
+          "select_ms": 2.0734873712062836
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.0480799227952957,
+          "score_ms": 6.552230536937714,
+          "select_ms": 2.0827823728322983
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.0436085015535355,
+          "score_ms": 6.5737733989953995,
+          "select_ms": 2.076712906360626
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.0431845784187317,
+          "score_ms": 6.327901735901833,
+          "select_ms": 2.077539309859276
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.042884334921837,
+          "score_ms": 6.777480453252792,
+          "select_ms": 2.078318625688553
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.0416367799043655,
+          "score_ms": 6.665746137499809,
+          "select_ms": 2.081457257270813
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.0427087545394897,
+          "score_ms": 6.543666139245033,
+          "select_ms": 2.0727908313274384
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.039442166686058,
+          "score_ms": 6.233649760484695,
+          "select_ms": 2.0761799812316895
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.043393298983574,
+          "score_ms": 6.562983393669128,
+          "select_ms": 2.0805927366018295
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.022929325699806,
+          "score_ms": 6.415104076266289,
+          "select_ms": 2.062099128961563
+        }
+      ],
+      "min_overlap": 1.0,
+      "max_score_error": 0.0
+    },
+    {
+      "variant": "fused",
+      "repetition": 1,
+      "kernel_only": false,
+      "samples_ms": [
+        6.529764,
+        6.530646,
+        6.666479,
+        6.523873,
+        6.413275,
+        7.147017,
+        7.227418,
+        6.876873,
+        6.65068,
+        7.203132,
+        6.821689,
+        6.560812,
+        6.462939,
+        6.52227,
+        6.49535,
+        6.429477,
+        6.347423,
+        6.630052,
+        6.741629,
+        6.945731
+      ],
+      "median_ms": 6.595432000000001,
+      "p95_ms": 7.2043463,
+      "counters": [
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.0620059818029404,
+          "score_ms": 7.157486513257027,
+          "select_ms": 2.108285367488861
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.053522378206253,
+          "score_ms": 7.509910076856613,
+          "select_ms": 2.099260628223419
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.0434815287590027,
+          "score_ms": 7.209951832890511,
+          "select_ms": 2.083688125014305
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.0685892552137375,
+          "score_ms": 8.456604793667793,
+          "select_ms": 2.1042140424251556
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.0604005306959152,
+          "score_ms": 7.661912128329277,
+          "select_ms": 2.0954523384571075
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.043046310544014,
+          "score_ms": 6.899235501885414,
+          "select_ms": 2.0792674720287323
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.075825124979019,
+          "score_ms": 7.593306183815002,
+          "select_ms": 2.086569905281067
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.0387984067201614,
+          "score_ms": 6.967377424240112,
+          "select_ms": 2.0700259506702423
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.034236326813698,
+          "score_ms": 6.4714755564928055,
+          "select_ms": 2.0767711997032166
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.045229583978653,
+          "score_ms": 6.274287477135658,
+          "select_ms": 2.0798965096473694
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.0632763504981995,
+          "score_ms": 7.577045038342476,
+          "select_ms": 2.1077140122652054
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.0485136806964874,
+          "score_ms": 6.822110489010811,
+          "select_ms": 2.09452523291111
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.0608599334955215,
+          "score_ms": 6.883080154657364,
+          "select_ms": 2.1109851747751236
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.0608359426259995,
+          "score_ms": 6.567865237593651,
+          "select_ms": 2.1046833395957947
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.071888640522957,
+          "score_ms": 6.687769278883934,
+          "select_ms": 2.111967012286186
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.070510044693947,
+          "score_ms": 6.7818421721458435,
+          "select_ms": 2.10449680685997
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.05206598341465,
+          "score_ms": 6.885026976466179,
+          "select_ms": 2.0872872322797775
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.0427301079034805,
+          "score_ms": 6.463849350810051,
+          "select_ms": 2.0846381783485413
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.043806865811348,
+          "score_ms": 6.727175310254097,
+          "select_ms": 2.0803807973861694
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.0506864935159683,
+          "score_ms": 6.47061975300312,
+          "select_ms": 2.0841040164232254
+        }
+      ],
+      "min_overlap": 1.0,
+      "max_score_error": 0.0
+    },
+    {
+      "variant": "tile8",
+      "repetition": 1,
+      "kernel_only": true,
+      "samples_ms": [
+        5.904275,
+        5.88553,
+        6.122292,
+        6.017917,
+        6.001316,
+        6.146558,
+        6.15854,
+        6.157568,
+        6.474811,
+        6.149914,
+        6.69389,
+        6.756617,
+        6.514575,
+        6.497904,
+        6.595086,
+        6.495049,
+        6.430528,
+        6.449043,
+        6.465092,
+        6.327977
+      ],
+      "median_ms": 6.3792525,
+      "p95_ms": 6.69702635,
+      "counters": [],
+      "min_overlap": 1.0,
+      "max_score_error": 2.86102294921875e-06
+    },
+    {
+      "variant": "cells",
+      "repetition": 1,
+      "kernel_only": false,
+      "samples_ms": [
+        1.176218,
+        0.531503,
+        3.698552,
+        1.047979,
+        0.515974,
+        3.711437,
+        0.525342,
+        0.520843,
+        0.536743,
+        0.513811,
+        0.478724,
+        0.50808,
+        0.580755,
+        0.533426,
+        1.72834,
+        3.529787,
+        0.517778,
+        3.692832,
+        0.531995,
+        0.535221
+      ],
+      "median_ms": 0.5343235,
+      "p95_ms": 3.69919625,
+      "counters": [
+        {
+          "full": 6250,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 19200000,
+          "bound_ms": 0.12678131461143494,
+          "score_ms": 1.6041313409805298,
+          "select_ms": 0.1305762380361557
+        },
+        {
+          "full": 3125,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 9600000,
+          "bound_ms": 0.0636446624994278,
+          "score_ms": 0.6939665675163269,
+          "select_ms": 0.06621082127094269
+        },
+        {
+          "full": 21875,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 67200000,
+          "bound_ms": 0.44525641202926636,
+          "score_ms": 5.353922992944717,
+          "select_ms": 0.45517832040786743
+        },
+        {
+          "full": 6250,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 19200000,
+          "bound_ms": 0.12784206867218018,
+          "score_ms": 1.6722559034824371,
+          "select_ms": 0.131229966878891
+        },
+        {
+          "full": 3125,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 9600000,
+          "bound_ms": 0.06397293508052826,
+          "score_ms": 0.6605248600244522,
+          "select_ms": 0.06583158671855927
+        },
+        {
+          "full": 21875,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 67200000,
+          "bound_ms": 0.44583387672901154,
+          "score_ms": 5.443833038210869,
+          "select_ms": 0.45369136333465576
+        },
+        {
+          "full": 3125,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 9600000,
+          "bound_ms": 0.06313832104206085,
+          "score_ms": 0.5844735503196716,
+          "select_ms": 0.06524583697319031
+        },
+        {
+          "full": 3125,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 9600000,
+          "bound_ms": 0.06317399442195892,
+          "score_ms": 0.5818673819303513,
+          "select_ms": 0.06522412598133087
+        },
+        {
+          "full": 3125,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 9600000,
+          "bound_ms": 0.0635172426700592,
+          "score_ms": 0.6812877058982849,
+          "select_ms": 0.0653001070022583
+        },
+        {
+          "full": 3125,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 9600000,
+          "bound_ms": 0.06384123861789703,
+          "score_ms": 0.7065009772777557,
+          "select_ms": 0.06581796705722809
+        },
+        {
+          "full": 3125,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 9600000,
+          "bound_ms": 0.06384678184986115,
+          "score_ms": 0.6200681626796722,
+          "select_ms": 0.06598556041717529
+        },
+        {
+          "full": 3125,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 9600000,
+          "bound_ms": 0.0637933760881424,
+          "score_ms": 0.6479631066322327,
+          "select_ms": 0.06537850201129913
+        },
+        {
+          "full": 3125,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 9600000,
+          "bound_ms": 0.06354290246963501,
+          "score_ms": 0.5989339649677277,
+          "select_ms": 0.06560687720775604
+        },
+        {
+          "full": 3125,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 9600000,
+          "bound_ms": 0.06346456706523895,
+          "score_ms": 0.5932939648628235,
+          "select_ms": 0.0675809383392334
+        },
+        {
+          "full": 9375,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 28800000,
+          "bound_ms": 0.1912567913532257,
+          "score_ms": 2.5251359045505524,
+          "select_ms": 0.19557538628578186
+        },
+        {
+          "full": 21875,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 67200000,
+          "bound_ms": 0.4441620856523514,
+          "score_ms": 5.614161863923073,
+          "select_ms": 0.4538603723049164
+        },
+        {
+          "full": 3125,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 9600000,
+          "bound_ms": 0.06292535364627838,
+          "score_ms": 0.5963130295276642,
+          "select_ms": 0.06486085057258606
+        },
+        {
+          "full": 21875,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 67200000,
+          "bound_ms": 0.44286300241947174,
+          "score_ms": 5.31443065404892,
+          "select_ms": 0.45169365406036377
+        },
+        {
+          "full": 3125,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 9600000,
+          "bound_ms": 0.06322897970676422,
+          "score_ms": 0.6467219293117523,
+          "select_ms": 0.06489162147045135
+        },
+        {
+          "full": 3125,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 9600000,
+          "bound_ms": 0.06329597532749176,
+          "score_ms": 0.726107269525528,
+          "select_ms": 0.06568902730941772
+        }
+      ],
+      "min_overlap": 1.0,
+      "max_score_error": 0.0
+    },
+    {
+      "variant": "va8",
+      "repetition": 1,
+      "kernel_only": false,
+      "samples_ms": [
+        5.466607,
+        5.475373,
+        5.352533,
+        5.405372,
+        5.792786,
+        5.830967,
+        5.438063,
+        5.769483,
+        5.598212,
+        5.697709,
+        5.648657,
+        5.620865,
+        5.629691,
+        5.693681,
+        5.679204,
+        5.589075,
+        5.629921,
+        5.96087,
+        5.964247,
+        6.014591
+      ],
+      "median_ms": 5.639289,
+      "p95_ms": 5.9667642,
+      "counters": [
+        {
+          "full": 3169,
+          "coordinates": 5692928,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9735168,
+          "bound_ms": 7.112464264035225,
+          "score_ms": 0.776095986366272,
+          "select_ms": 0.06819432973861694
+        },
+        {
+          "full": 3177,
+          "coordinates": 5694944,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9759744,
+          "bound_ms": 7.038108453154564,
+          "score_ms": 0.7635981887578964,
+          "select_ms": 0.07248571515083313
+        },
+        {
+          "full": 3177,
+          "coordinates": 5696288,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9759744,
+          "bound_ms": 7.122485548257828,
+          "score_ms": 0.8419514149427414,
+          "select_ms": 0.06831680238246918
+        },
+        {
+          "full": 3175,
+          "coordinates": 5695328,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9753600,
+          "bound_ms": 7.304294794797897,
+          "score_ms": 0.8368660807609558,
+          "select_ms": 0.06808298826217651
+        },
+        {
+          "full": 3165,
+          "coordinates": 5692864,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9722880,
+          "bound_ms": 7.497036978602409,
+          "score_ms": 0.8321769386529922,
+          "select_ms": 0.06857955455780029
+        },
+        {
+          "full": 3175,
+          "coordinates": 5698080,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9753600,
+          "bound_ms": 7.4767642468214035,
+          "score_ms": 0.9234753996133804,
+          "select_ms": 0.06919391453266144
+        },
+        {
+          "full": 3175,
+          "coordinates": 5698016,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9753600,
+          "bound_ms": 7.482362478971481,
+          "score_ms": 0.8393443673849106,
+          "select_ms": 0.06921780109405518
+        },
+        {
+          "full": 3174,
+          "coordinates": 5702176,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9750528,
+          "bound_ms": 7.515704855322838,
+          "score_ms": 0.8424349129199982,
+          "select_ms": 0.06953945755958557
+        },
+        {
+          "full": 3183,
+          "coordinates": 5699200,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9778176,
+          "bound_ms": 7.750324308872223,
+          "score_ms": 0.9057475328445435,
+          "select_ms": 0.06881335377693176
+        },
+        {
+          "full": 3172,
+          "coordinates": 5700576,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9744384,
+          "bound_ms": 7.16084985435009,
+          "score_ms": 0.757495254278183,
+          "select_ms": 0.0676438957452774
+        },
+        {
+          "full": 3174,
+          "coordinates": 5700064,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9750528,
+          "bound_ms": 7.078906819224358,
+          "score_ms": 0.7641304135322571,
+          "select_ms": 0.06750711798667908
+        },
+        {
+          "full": 3178,
+          "coordinates": 5702208,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9762816,
+          "bound_ms": 6.831549942493439,
+          "score_ms": 0.7116263061761856,
+          "select_ms": 0.06787236034870148
+        },
+        {
+          "full": 3177,
+          "coordinates": 5698304,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9759744,
+          "bound_ms": 6.931617945432663,
+          "score_ms": 0.747241422533989,
+          "select_ms": 0.0680350661277771
+        },
+        {
+          "full": 3177,
+          "coordinates": 5701344,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9759744,
+          "bound_ms": 6.961756408214569,
+          "score_ms": 0.7347995191812515,
+          "select_ms": 0.06725266575813293
+        },
+        {
+          "full": 3175,
+          "coordinates": 5699712,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9753600,
+          "bound_ms": 6.939919054508209,
+          "score_ms": 0.7412309646606445,
+          "select_ms": 0.06719805300235748
+        },
+        {
+          "full": 3181,
+          "coordinates": 5707360,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9772032,
+          "bound_ms": 6.775409623980522,
+          "score_ms": 0.7472107410430908,
+          "select_ms": 0.06776219606399536
+        },
+        {
+          "full": 3167,
+          "coordinates": 5703776,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9729024,
+          "bound_ms": 6.919828087091446,
+          "score_ms": 0.7767530977725983,
+          "select_ms": 0.0673152357339859
+        },
+        {
+          "full": 3173,
+          "coordinates": 5706688,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9747456,
+          "bound_ms": 6.869127511978149,
+          "score_ms": 0.7488967627286911,
+          "select_ms": 0.06753818690776825
+        },
+        {
+          "full": 3171,
+          "coordinates": 5702176,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9741312,
+          "bound_ms": 6.5617750734090805,
+          "score_ms": 0.740153580904007,
+          "select_ms": 0.06690694391727448
+        },
+        {
+          "full": 3179,
+          "coordinates": 5706752,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9765888,
+          "bound_ms": 6.82398895919323,
+          "score_ms": 0.7450513690710068,
+          "select_ms": 0.06726126372814178
+        }
+      ],
+      "min_overlap": 1.0,
+      "max_score_error": 0.0
+    },
+    {
+      "variant": "partial-l2",
+      "repetition": 1,
+      "kernel_only": false,
+      "samples_ms": [
+        11.47734,
+        11.460198,
+        11.47704,
+        11.440412,
+        11.674369,
+        11.570254,
+        11.473734,
+        11.630106,
+        12.484122,
+        11.385589,
+        11.558903,
+        11.777361,
+        11.871858,
+        11.506274,
+        11.633141,
+        11.48828,
+        12.374177,
+        11.777321,
+        11.62174,
+        11.494863
+      ],
+      "median_ms": 11.5645785,
+      "p95_ms": 12.379674249999999,
+      "counters": [
+        {
+          "full": 122,
+          "coordinates": 5505504,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 374784,
+          "bound_ms": 15.548147916793823,
+          "score_ms": 0.008669883012771606,
+          "select_ms": 0.0037090182304382324
+        },
+        {
+          "full": 122,
+          "coordinates": 5506400,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 374784,
+          "bound_ms": 14.98918630182743,
+          "score_ms": 0.007712036371231079,
+          "select_ms": 0.0033839643001556396
+        },
+        {
+          "full": 106,
+          "coordinates": 5524128,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 325632,
+          "bound_ms": 15.171109572052956,
+          "score_ms": 0.007131978869438171,
+          "select_ms": 0.0030449330806732178
+        },
+        {
+          "full": 105,
+          "coordinates": 5481888,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 322560,
+          "bound_ms": 14.808229461312294,
+          "score_ms": 0.007001996040344238,
+          "select_ms": 0.0031569451093673706
+        },
+        {
+          "full": 97,
+          "coordinates": 5515776,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 297984,
+          "bound_ms": 15.599003314971924,
+          "score_ms": 0.006657913327217102,
+          "select_ms": 0.0027220845222473145
+        },
+        {
+          "full": 108,
+          "coordinates": 5485728,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 331776,
+          "bound_ms": 14.70629332959652,
+          "score_ms": 0.00716400146484375,
+          "select_ms": 0.0031469613313674927
+        },
+        {
+          "full": 123,
+          "coordinates": 5513824,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 377856,
+          "bound_ms": 14.67665396630764,
+          "score_ms": 0.007728010416030884,
+          "select_ms": 0.003358006477355957
+        },
+        {
+          "full": 108,
+          "coordinates": 5506304,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 331776,
+          "bound_ms": 14.99939650297165,
+          "score_ms": 0.007864013314247131,
+          "select_ms": 0.0033259987831115723
+        },
+        {
+          "full": 108,
+          "coordinates": 5496704,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 331776,
+          "bound_ms": 15.716434478759766,
+          "score_ms": 0.0074430108070373535,
+          "select_ms": 0.003772929310798645
+        },
+        {
+          "full": 109,
+          "coordinates": 5492544,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 334848,
+          "bound_ms": 15.988631814718246,
+          "score_ms": 0.0074278563261032104,
+          "select_ms": 0.003647059202194214
+        },
+        {
+          "full": 124,
+          "coordinates": 5518112,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 380928,
+          "bound_ms": 15.93136316537857,
+          "score_ms": 0.00848400592803955,
+          "select_ms": 0.004526033997535706
+        },
+        {
+          "full": 111,
+          "coordinates": 5516544,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 340992,
+          "bound_ms": 16.549410179257393,
+          "score_ms": 0.007984042167663574,
+          "select_ms": 0.0040699392557144165
+        },
+        {
+          "full": 120,
+          "coordinates": 5512768,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 368640,
+          "bound_ms": 16.55751645565033,
+          "score_ms": 0.009139031171798706,
+          "select_ms": 0.00420805811882019
+        },
+        {
+          "full": 124,
+          "coordinates": 5540864,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 380928,
+          "bound_ms": 15.289894253015518,
+          "score_ms": 0.008775994181632996,
+          "select_ms": 0.005058065056800842
+        },
+        {
+          "full": 105,
+          "coordinates": 5541696,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 322560,
+          "bound_ms": 15.880045235157013,
+          "score_ms": 0.007955044507980347,
+          "select_ms": 0.004035934805870056
+        },
+        {
+          "full": 108,
+          "coordinates": 5524640,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 331776,
+          "bound_ms": 14.990304812788963,
+          "score_ms": 0.007747098803520203,
+          "select_ms": 0.0037890076637268066
+        },
+        {
+          "full": 112,
+          "coordinates": 5488512,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 344064,
+          "bound_ms": 15.787822872400284,
+          "score_ms": 0.008090034127235413,
+          "select_ms": 0.0032938718795776367
+        },
+        {
+          "full": 123,
+          "coordinates": 5517888,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 377856,
+          "bound_ms": 14.874301493167877,
+          "score_ms": 0.00776982307434082,
+          "select_ms": 0.003503084182739258
+        },
+        {
+          "full": 105,
+          "coordinates": 5503808,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 322560,
+          "bound_ms": 14.392925724387169,
+          "score_ms": 0.006849989295005798,
+          "select_ms": 0.0027969777584075928
+        },
+        {
+          "full": 108,
+          "coordinates": 5523392,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 331776,
+          "bound_ms": 14.761041074991226,
+          "score_ms": 0.007385998964309692,
+          "select_ms": 0.003115028142929077
+        }
+      ],
+      "min_overlap": 1.0,
+      "max_score_error": 0.0
+    },
+    {
+      "variant": "two-pass",
+      "repetition": 1,
+      "kernel_only": false,
+      "samples_ms": [
+        6.828272,
+        7.013518,
+        6.949729,
+        6.886621,
+        6.793667,
+        6.7635,
+        6.93444,
+        6.775373,
+        6.791563,
+        6.821048,
+        6.782016,
+        6.520987,
+        6.44771,
+        6.259709,
+        6.361519,
+        6.144594,
+        6.210607,
+        6.513052,
+        6.448442,
+        6.336443
+      ],
+      "median_ms": 6.769436499999999,
+      "p95_ms": 6.952918449999999,
+      "counters": [
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.050500601530075,
+          "score_ms": 7.313610300421715,
+          "select_ms": 2.181972160935402
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.0619290620088577,
+          "score_ms": 6.88409423828125,
+          "select_ms": 2.176490440964699
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.0373389422893524,
+          "score_ms": 6.952410593628883,
+          "select_ms": 2.1686647087335587
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.0345183312892914,
+          "score_ms": 6.904896154999733,
+          "select_ms": 2.1642968505620956
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.011281058192253,
+          "score_ms": 6.935184642672539,
+          "select_ms": 2.152636483311653
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.008812502026558,
+          "score_ms": 6.668541610240936,
+          "select_ms": 2.1415920704603195
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.010402202606201,
+          "score_ms": 6.899545833468437,
+          "select_ms": 2.143923342227936
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.012051612138748,
+          "score_ms": 6.8034737557172775,
+          "select_ms": 2.1408136785030365
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.0129611492156982,
+          "score_ms": 6.907285645604134,
+          "select_ms": 2.1466707289218903
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.008831709623337,
+          "score_ms": 6.604127377271652,
+          "select_ms": 2.1359586268663406
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.0202996134757996,
+          "score_ms": 6.882684886455536,
+          "select_ms": 2.139897570014
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.015441656112671,
+          "score_ms": 6.755500689148903,
+          "select_ms": 2.142066642642021
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.0180166959762573,
+          "score_ms": 6.942006856203079,
+          "select_ms": 2.1428560316562653
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.0102642625570297,
+          "score_ms": 6.6041452288627625,
+          "select_ms": 2.140160486102104
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.020172417163849,
+          "score_ms": 6.848748713731766,
+          "select_ms": 2.1537441313266754
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.020123079419136,
+          "score_ms": 6.725797653198242,
+          "select_ms": 2.1458798944950104
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.0183214992284775,
+          "score_ms": 6.777138650417328,
+          "select_ms": 2.142297700047493
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.015597328543663,
+          "score_ms": 6.540673866868019,
+          "select_ms": 2.1447429060935974
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.0155113339424133,
+          "score_ms": 6.838740900158882,
+          "select_ms": 2.147294834256172
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.0112699270248413,
+          "score_ms": 6.7938526421785355,
+          "select_ms": 2.1386068165302277
+        }
+      ],
+      "min_overlap": 1.0,
+      "max_score_error": 0.0
+    },
+    {
+      "variant": "two-pass",
+      "repetition": 2,
+      "kernel_only": false,
+      "samples_ms": [
+        6.641373,
+        6.36719,
+        6.343114,
+        6.21221,
+        6.104779,
+        6.259308,
+        6.184338,
+        6.12667,
+        6.088278,
+        6.242737,
+        6.449524,
+        6.4527,
+        6.349547,
+        6.317067,
+        6.350709,
+        6.341041,
+        6.507953,
+        6.336874,
+        6.29751,
+        6.337534
+      ],
+      "median_ms": 6.337204,
+      "p95_ms": 6.5146239999999995,
+      "counters": [
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.0298175662755966,
+          "score_ms": 6.876416206359863,
+          "select_ms": 2.156219020485878
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.0135888159275055,
+          "score_ms": 6.705749928951263,
+          "select_ms": 2.1421093195676804
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.015189304947853,
+          "score_ms": 6.91130618751049,
+          "select_ms": 2.138181373476982
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.0174352824687958,
+          "score_ms": 6.836086019873619,
+          "select_ms": 2.1439161896705627
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.013450101017952,
+          "score_ms": 6.8628882467746735,
+          "select_ms": 2.1381255090236664
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.011054813861847,
+          "score_ms": 6.685108065605164,
+          "select_ms": 2.141720801591873
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.0095207393169403,
+          "score_ms": 6.863839760422707,
+          "select_ms": 2.1434341371059418
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.011490687727928,
+          "score_ms": 6.728063330054283,
+          "select_ms": 2.1378512531518936
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.0130536556243896,
+          "score_ms": 6.861303523182869,
+          "select_ms": 2.139636531472206
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.0145141780376434,
+          "score_ms": 6.54181133210659,
+          "select_ms": 2.1402222216129303
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.0108274668455124,
+          "score_ms": 6.81738455593586,
+          "select_ms": 2.1492422372102737
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.0146337747573853,
+          "score_ms": 6.8656996339559555,
+          "select_ms": 2.138132929801941
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.010144516825676,
+          "score_ms": 6.753184080123901,
+          "select_ms": 2.138948291540146
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.008784294128418,
+          "score_ms": 6.623379826545715,
+          "select_ms": 2.1429378539323807
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.007833853363991,
+          "score_ms": 6.751653298735619,
+          "select_ms": 2.1352226436138153
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.007078230381012,
+          "score_ms": 6.770520925521851,
+          "select_ms": 2.143933489918709
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.062948763370514,
+          "score_ms": 6.712362214922905,
+          "select_ms": 2.137132942676544
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.01624995470047,
+          "score_ms": 6.617859482765198,
+          "select_ms": 2.144586607813835
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.0125032663345337,
+          "score_ms": 6.7923872619867325,
+          "select_ms": 2.1393003314733505
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.028245121240616,
+          "score_ms": 7.266791477799416,
+          "select_ms": 2.1657703816890717
+        }
+      ],
+      "min_overlap": 1.0,
+      "max_score_error": 0.0
+    },
+    {
+      "variant": "partial-l2",
+      "repetition": 2,
+      "kernel_only": false,
+      "samples_ms": [
+        11.182629,
+        10.702742,
+        10.867561,
+        10.982626,
+        11.440261,
+        11.387783,
+        11.492619,
+        11.464897,
+        11.645014,
+        11.628453,
+        11.331959,
+        11.747295,
+        12.039761,
+        11.700228,
+        11.54132,
+        11.616411,
+        11.790747,
+        11.721647,
+        11.009446,
+        10.925138
+      ],
+      "median_ms": 11.478758,
+      "p95_ms": 11.8031977,
+      "counters": [
+        {
+          "full": 122,
+          "coordinates": 5505504,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 374784,
+          "bound_ms": 14.511795312166214,
+          "score_ms": 0.007933095097541809,
+          "select_ms": 0.003564000129699707
+        },
+        {
+          "full": 122,
+          "coordinates": 5506400,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 374784,
+          "bound_ms": 13.369670137763023,
+          "score_ms": 0.007605910301208496,
+          "select_ms": 0.003351062536239624
+        },
+        {
+          "full": 106,
+          "coordinates": 5524128,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 325632,
+          "bound_ms": 14.4451574832201,
+          "score_ms": 0.006723940372467041,
+          "select_ms": 0.0029850751161575317
+        },
+        {
+          "full": 105,
+          "coordinates": 5481888,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 322560,
+          "bound_ms": 13.73994828760624,
+          "score_ms": 0.006980031728744507,
+          "select_ms": 0.002805054187774658
+        },
+        {
+          "full": 97,
+          "coordinates": 5515776,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 297984,
+          "bound_ms": 14.59790413081646,
+          "score_ms": 0.006747975945472717,
+          "select_ms": 0.0026360005140304565
+        },
+        {
+          "full": 108,
+          "coordinates": 5485728,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 331776,
+          "bound_ms": 13.516221389174461,
+          "score_ms": 0.0070619285106658936,
+          "select_ms": 0.003025054931640625
+        },
+        {
+          "full": 123,
+          "coordinates": 5513824,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 377856,
+          "bound_ms": 14.476866364479065,
+          "score_ms": 0.00790494680404663,
+          "select_ms": 0.0033870190382003784
+        },
+        {
+          "full": 108,
+          "coordinates": 5506304,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 331776,
+          "bound_ms": 13.74018232524395,
+          "score_ms": 0.007270932197570801,
+          "select_ms": 0.002806052565574646
+        },
+        {
+          "full": 108,
+          "coordinates": 5496704,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 331776,
+          "bound_ms": 14.365537345409393,
+          "score_ms": 0.006925985217094421,
+          "select_ms": 0.002854064106941223
+        },
+        {
+          "full": 109,
+          "coordinates": 5492544,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 334848,
+          "bound_ms": 13.670828863978386,
+          "score_ms": 0.006838977336883545,
+          "select_ms": 0.002905905246734619
+        },
+        {
+          "full": 124,
+          "coordinates": 5518112,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 380928,
+          "bound_ms": 13.884532183408737,
+          "score_ms": 0.007943898439407349,
+          "select_ms": 0.0034759938716888428
+        },
+        {
+          "full": 111,
+          "coordinates": 5516544,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 340992,
+          "bound_ms": 13.915038511157036,
+          "score_ms": 0.007226049900054932,
+          "select_ms": 0.0031080693006515503
+        },
+        {
+          "full": 120,
+          "coordinates": 5512768,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 368640,
+          "bound_ms": 14.732311487197876,
+          "score_ms": 0.007572963833808899,
+          "select_ms": 0.003224998712539673
+        },
+        {
+          "full": 124,
+          "coordinates": 5540864,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 380928,
+          "bound_ms": 14.222494691610336,
+          "score_ms": 0.007577002048492432,
+          "select_ms": 0.003303036093711853
+        },
+        {
+          "full": 105,
+          "coordinates": 5541696,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 322560,
+          "bound_ms": 14.4683688133955,
+          "score_ms": 0.006558939814567566,
+          "select_ms": 0.0027779489755630493
+        },
+        {
+          "full": 108,
+          "coordinates": 5524640,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 331776,
+          "bound_ms": 13.902061492204666,
+          "score_ms": 0.006559059023857117,
+          "select_ms": 0.0029859691858291626
+        },
+        {
+          "full": 112,
+          "coordinates": 5488512,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 344064,
+          "bound_ms": 14.686021953821182,
+          "score_ms": 0.006989046931266785,
+          "select_ms": 0.0029839426279067993
+        },
+        {
+          "full": 123,
+          "coordinates": 5517888,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 377856,
+          "bound_ms": 13.86333866417408,
+          "score_ms": 0.007474035024642944,
+          "select_ms": 0.003306955099105835
+        },
+        {
+          "full": 105,
+          "coordinates": 5503808,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 322560,
+          "bound_ms": 13.830464199185371,
+          "score_ms": 0.006432041525840759,
+          "select_ms": 0.0028260648250579834
+        },
+        {
+          "full": 108,
+          "coordinates": 5523392,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 331776,
+          "bound_ms": 14.35610730946064,
+          "score_ms": 0.006770908832550049,
+          "select_ms": 0.0030959248542785645
+        }
+      ],
+      "min_overlap": 1.0,
+      "max_score_error": 0.0
+    },
+    {
+      "variant": "va8",
+      "repetition": 2,
+      "kernel_only": false,
+      "samples_ms": [
+        5.41494,
+        5.406495,
+        5.279187,
+        5.224224,
+        5.367471,
+        5.261083,
+        5.290838,
+        5.373203,
+        5.284687,
+        5.352704,
+        5.333307,
+        5.425339,
+        5.394111,
+        5.328719,
+        5.313591,
+        5.234923,
+        5.340531,
+        5.395484,
+        5.169631,
+        5.322297
+      ],
+      "median_ms": 5.3310130000000004,
+      "p95_ms": 5.41545995,
+      "counters": [
+        {
+          "full": 3169,
+          "coordinates": 5692928,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9735168,
+          "bound_ms": 6.481529623270035,
+          "score_ms": 0.7067698389291763,
+          "select_ms": 0.06805340945720673
+        },
+        {
+          "full": 3177,
+          "coordinates": 5694944,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9759744,
+          "bound_ms": 6.472202435135841,
+          "score_ms": 0.695998802781105,
+          "select_ms": 0.06726087629795074
+        },
+        {
+          "full": 3177,
+          "coordinates": 5696288,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9759744,
+          "bound_ms": 6.109085142612457,
+          "score_ms": 0.7600996047258377,
+          "select_ms": 0.06719692051410675
+        },
+        {
+          "full": 3175,
+          "coordinates": 5695328,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9753600,
+          "bound_ms": 5.99775367975235,
+          "score_ms": 0.7438569366931915,
+          "select_ms": 0.06642331182956696
+        },
+        {
+          "full": 3165,
+          "coordinates": 5692864,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9722880,
+          "bound_ms": 6.043136864900589,
+          "score_ms": 0.6821366548538208,
+          "select_ms": 0.06580790877342224
+        },
+        {
+          "full": 3175,
+          "coordinates": 5698080,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9753600,
+          "bound_ms": 6.021770358085632,
+          "score_ms": 0.7134819477796555,
+          "select_ms": 0.06685523688793182
+        },
+        {
+          "full": 3175,
+          "coordinates": 5698016,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9753600,
+          "bound_ms": 6.199597388505936,
+          "score_ms": 0.7187129557132721,
+          "select_ms": 0.0686890184879303
+        },
+        {
+          "full": 3174,
+          "coordinates": 5702176,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9750528,
+          "bound_ms": 6.447622910141945,
+          "score_ms": 0.7124728858470917,
+          "select_ms": 0.06624527275562286
+        },
+        {
+          "full": 3183,
+          "coordinates": 5699200,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9778176,
+          "bound_ms": 6.327482625842094,
+          "score_ms": 0.7137393355369568,
+          "select_ms": 0.06639005243778229
+        },
+        {
+          "full": 3172,
+          "coordinates": 5700576,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9744384,
+          "bound_ms": 6.161928236484528,
+          "score_ms": 0.6885471642017365,
+          "select_ms": 0.06629723310470581
+        },
+        {
+          "full": 3174,
+          "coordinates": 5700064,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9750528,
+          "bound_ms": 6.171091362833977,
+          "score_ms": 0.7130715698003769,
+          "select_ms": 0.06702914834022522
+        },
+        {
+          "full": 3178,
+          "coordinates": 5702208,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9762816,
+          "bound_ms": 6.17251555621624,
+          "score_ms": 0.6797123849391937,
+          "select_ms": 0.06691566109657288
+        },
+        {
+          "full": 3177,
+          "coordinates": 5698304,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9759744,
+          "bound_ms": 6.224157959222794,
+          "score_ms": 0.6997879296541214,
+          "select_ms": 0.06674632430076599
+        },
+        {
+          "full": 3177,
+          "coordinates": 5701344,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9759744,
+          "bound_ms": 6.144907921552658,
+          "score_ms": 0.7080692946910858,
+          "select_ms": 0.06709539890289307
+        },
+        {
+          "full": 3175,
+          "coordinates": 5699712,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9753600,
+          "bound_ms": 6.24708665907383,
+          "score_ms": 0.6746423989534378,
+          "select_ms": 0.066465824842453
+        },
+        {
+          "full": 3181,
+          "coordinates": 5707360,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9772032,
+          "bound_ms": 6.124444216489792,
+          "score_ms": 0.6932781785726547,
+          "select_ms": 0.06658411026000977
+        },
+        {
+          "full": 3167,
+          "coordinates": 5703776,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9729024,
+          "bound_ms": 6.298815369606018,
+          "score_ms": 0.7244464606046677,
+          "select_ms": 0.06687991321086884
+        },
+        {
+          "full": 3173,
+          "coordinates": 5706688,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9747456,
+          "bound_ms": 6.12862192094326,
+          "score_ms": 0.6924503594636917,
+          "select_ms": 0.0665532797574997
+        },
+        {
+          "full": 3171,
+          "coordinates": 5702176,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9741312,
+          "bound_ms": 5.9780323058366776,
+          "score_ms": 0.6785970479249954,
+          "select_ms": 0.06613393127918243
+        },
+        {
+          "full": 3179,
+          "coordinates": 5706752,
+          "bounds": 99990,
+          "cells": 0,
+          "bytes": 9765888,
+          "bound_ms": 6.347986951470375,
+          "score_ms": 0.7044522315263748,
+          "select_ms": 0.06674504280090332
+        }
+      ],
+      "min_overlap": 1.0,
+      "max_score_error": 0.0
+    },
+    {
+      "variant": "cells",
+      "repetition": 2,
+      "kernel_only": false,
+      "samples_ms": [
+        1.000871,
+        0.459759,
+        3.228053,
+        0.981054,
+        0.482151,
+        3.222051,
+        0.466773,
+        0.48181,
+        0.450352,
+        0.468245,
+        0.439631,
+        0.452576,
+        0.445813,
+        0.450442,
+        1.531172,
+        3.42963,
+        0.520833,
+        3.306921,
+        0.500335,
+        0.50826
+      ],
+      "median_ms": 0.491243,
+      "p95_ms": 3.31305645,
+      "counters": [
+        {
+          "full": 6250,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 19200000,
+          "bound_ms": 0.12509208917617798,
+          "score_ms": 1.6254452168941498,
+          "select_ms": 0.12911006808280945
+        },
+        {
+          "full": 3125,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 9600000,
+          "bound_ms": 0.06354488432407379,
+          "score_ms": 0.5866139531135559,
+          "select_ms": 0.06576274335384369
+        },
+        {
+          "full": 21875,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 67200000,
+          "bound_ms": 0.4394788295030594,
+          "score_ms": 5.058504492044449,
+          "select_ms": 0.4505358040332794
+        },
+        {
+          "full": 6250,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 19200000,
+          "bound_ms": 0.12967224419116974,
+          "score_ms": 1.5088526010513306,
+          "select_ms": 0.12834805250167847
+        },
+        {
+          "full": 3125,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 9600000,
+          "bound_ms": 0.06246650218963623,
+          "score_ms": 0.6212309747934341,
+          "select_ms": 0.06447473168373108
+        },
+        {
+          "full": 21875,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 67200000,
+          "bound_ms": 0.43848323822021484,
+          "score_ms": 4.849038302898407,
+          "select_ms": 0.4480818659067154
+        },
+        {
+          "full": 3125,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 9600000,
+          "bound_ms": 0.06343503296375275,
+          "score_ms": 0.6218008995056152,
+          "select_ms": 0.06512264907360077
+        },
+        {
+          "full": 3125,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 9600000,
+          "bound_ms": 0.0629139393568039,
+          "score_ms": 0.5892101377248764,
+          "select_ms": 0.06483705341815948
+        },
+        {
+          "full": 3125,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 9600000,
+          "bound_ms": 0.062391042709350586,
+          "score_ms": 0.5686150193214417,
+          "select_ms": 0.06463472545146942
+        },
+        {
+          "full": 3125,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 9600000,
+          "bound_ms": 0.06237705051898956,
+          "score_ms": 0.6006095260381699,
+          "select_ms": 0.0644095242023468
+        },
+        {
+          "full": 3125,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 9600000,
+          "bound_ms": 0.0624200701713562,
+          "score_ms": 0.5660328716039658,
+          "select_ms": 0.06479869782924652
+        },
+        {
+          "full": 3125,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 9600000,
+          "bound_ms": 0.06245510280132294,
+          "score_ms": 0.5582118630409241,
+          "select_ms": 0.0645696371793747
+        },
+        {
+          "full": 3125,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 9600000,
+          "bound_ms": 0.06262396275997162,
+          "score_ms": 0.5893919169902802,
+          "select_ms": 0.06446057558059692
+        },
+        {
+          "full": 3125,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 9600000,
+          "bound_ms": 0.0627715140581131,
+          "score_ms": 0.6120288819074631,
+          "select_ms": 0.06506583094596863
+        },
+        {
+          "full": 9375,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 28800000,
+          "bound_ms": 0.18783634901046753,
+          "score_ms": 2.406092554330826,
+          "select_ms": 0.1927928328514099
+        },
+        {
+          "full": 21875,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 67200000,
+          "bound_ms": 0.4412912428379059,
+          "score_ms": 5.079662457108498,
+          "select_ms": 0.44906696677207947
+        },
+        {
+          "full": 3125,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 9600000,
+          "bound_ms": 0.06248690187931061,
+          "score_ms": 0.5659160912036896,
+          "select_ms": 0.06447376310825348
+        },
+        {
+          "full": 21875,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 67200000,
+          "bound_ms": 0.43904441595077515,
+          "score_ms": 4.791917607188225,
+          "select_ms": 0.4473102241754532
+        },
+        {
+          "full": 3125,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 9600000,
+          "bound_ms": 0.062332794070243835,
+          "score_ms": 0.5865506678819656,
+          "select_ms": 0.06417712569236755
+        },
+        {
+          "full": 3125,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 32,
+          "bytes": 9600000,
+          "bound_ms": 0.06242997944355011,
+          "score_ms": 0.6692231893539429,
+          "select_ms": 0.06449995934963226
+        }
+      ],
+      "min_overlap": 1.0,
+      "max_score_error": 0.0
+    },
+    {
+      "variant": "tile8",
+      "repetition": 2,
+      "kernel_only": true,
+      "samples_ms": [
+        6.841466,
+        7.259698,
+        6.705692,
+        6.695703,
+        6.826028,
+        6.465483,
+        6.52793,
+        6.44774,
+        7.033005,
+        7.337063,
+        7.570749,
+        7.684362,
+        8.018076,
+        7.746788,
+        7.49593,
+        7.366497,
+        8.035207,
+        7.908651,
+        9.095749,
+        9.981675
+      ],
+      "median_ms": 7.35178,
+      "p95_ms": 9.1400453,
+      "counters": [],
+      "min_overlap": 1.0,
+      "max_score_error": 2.86102294921875e-06
+    },
+    {
+      "variant": "fused",
+      "repetition": 2,
+      "kernel_only": false,
+      "samples_ms": [
+        7.35674,
+        7.098867,
+        6.994632,
+        6.607789,
+        7.20752,
+        6.944299,
+        7.091453,
+        6.422143,
+        6.252536,
+        6.188216,
+        6.261603,
+        6.579757,
+        6.399991,
+        6.348285,
+        6.307118,
+        6.332125,
+        6.611546,
+        6.435958,
+        6.375195,
+        6.350679
+      ],
+      "median_ms": 6.429050500000001,
+      "p95_ms": 7.214981,
+      "counters": [
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.032772734761238,
+          "score_ms": 7.110587194561958,
+          "select_ms": 2.071778044104576
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.0281468629837036,
+          "score_ms": 6.777959525585175,
+          "select_ms": 2.058358281850815
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.034925550222397,
+          "score_ms": 7.30459101498127,
+          "select_ms": 2.0722335875034332
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.0300530046224594,
+          "score_ms": 6.898814365267754,
+          "select_ms": 2.0661259293556213
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.0435884296894073,
+          "score_ms": 7.096101209521294,
+          "select_ms": 2.0808713883161545
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.058082014322281,
+          "score_ms": 7.034543767571449,
+          "select_ms": 2.0833443701267242
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.048620566725731,
+          "score_ms": 7.301231011748314,
+          "select_ms": 2.0996754616498947
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.0524968951940536,
+          "score_ms": 6.97465717792511,
+          "select_ms": 2.085029363632202
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.052904352545738,
+          "score_ms": 7.041364431381226,
+          "select_ms": 2.0861746221780777
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.044431120157242,
+          "score_ms": 6.754571884870529,
+          "select_ms": 2.0909257233142853
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.049593687057495,
+          "score_ms": 6.916275531053543,
+          "select_ms": 2.0877344012260437
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.0464334189891815,
+          "score_ms": 6.831133097410202,
+          "select_ms": 2.078603222966194
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.036968410015106,
+          "score_ms": 6.857560336589813,
+          "select_ms": 2.092915505170822
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.036815568804741,
+          "score_ms": 6.638414055109024,
+          "select_ms": 2.0700291246175766
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.040975049138069,
+          "score_ms": 6.834001615643501,
+          "select_ms": 2.0771011114120483
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.0402776151895523,
+          "score_ms": 6.806851118803024,
+          "select_ms": 2.082533895969391
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.034395456314087,
+          "score_ms": 6.804454475641251,
+          "select_ms": 2.0740699768066406
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.0431042164564133,
+          "score_ms": 6.647790044546127,
+          "select_ms": 2.081801936030388
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.0436244755983353,
+          "score_ms": 6.935393333435059,
+          "select_ms": 2.0836249589920044
+        },
+        {
+          "full": 100000,
+          "coordinates": 0,
+          "bounds": 0,
+          "cells": 0,
+          "bytes": 307200000,
+          "bound_ms": 2.0403047651052475,
+          "score_ms": 6.848617196083069,
+          "select_ms": 2.0739280730485916
+        }
+      ],
+      "min_overlap": 1.0,
+      "max_score_error": 0.0
+    }
+  ],
+  "complete": true
+}

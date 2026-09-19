@@ -1,3 +1,4 @@
+import os
 import json
 from pathlib import Path
 import subprocess
@@ -5,7 +6,7 @@ import sys
 
 
 SCRIPT = Path(__file__).resolve().parents[1] / "benchmarks/exact/bench.py"
-EXTENSION = SCRIPT.parents[2] / "dist/vec0.so"
+EXTENSION = Path(os.environ.get("VEC_TEST_EXTENSION", str(SCRIPT.parents[2] / "dist/vec0.so"))).resolve()
 
 
 def cli(*args):

@@ -6,9 +6,11 @@ import os
 def _vec_debug():
     db = sqlite3.connect(":memory:")
     db.enable_load_extension(True)
-    db.load_extension("dist/vec0")
+    db.load_extension(os.environ.get("VEC_TEST_EXTENSION", "dist/vec0"), entrypoint="sqlite3_vec_init")
     db.enable_load_extension(False)
-    return db.execute("SELECT vec_debug()").fetchone()[0]
+    debug = db.execute("SELECT vec_debug()").fetchone()[0]
+    db.close()
+    return debug
 
 
 def _has_build_flag(flag):
@@ -31,6 +33,6 @@ def db():
     db = sqlite3.connect(":memory:")
     db.row_factory = sqlite3.Row
     db.enable_load_extension(True)
-    db.load_extension("dist/vec0")
+    db.load_extension(os.environ.get("VEC_TEST_EXTENSION", "dist/vec0"), entrypoint="sqlite3_vec_init")
     db.enable_load_extension(False)
     return db

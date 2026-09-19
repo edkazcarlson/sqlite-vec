@@ -1,3 +1,4 @@
+import os
 import sqlite3
 import struct
 import pytest
@@ -413,7 +414,7 @@ def _file_db(tmp_path):
     db = sqlite3.connect(str(tmp_path / "test.db"))
     db.row_factory = sqlite3.Row
     db.enable_load_extension(True)
-    db.load_extension("dist/vec0")
+    db.load_extension(os.environ.get("VEC_TEST_EXTENSION", "dist/vec0"), entrypoint="sqlite3_vec_init")
     db.enable_load_extension(False)
     return db
 
@@ -493,7 +494,7 @@ def test_wal_concurrent_reader_during_write(tmp_path):
     # Writer: create table, insert initial rows, enable WAL
     writer = sqlite3.connect(db_path)
     writer.enable_load_extension(True)
-    writer.load_extension("dist/vec0")
+    writer.load_extension(os.environ.get("VEC_TEST_EXTENSION", "dist/vec0"), entrypoint="sqlite3_vec_init")
     writer.execute("PRAGMA journal_mode=WAL")
     writer.execute(
         f"CREATE VIRTUAL TABLE v USING vec0(emb float[{dims}])"
@@ -505,7 +506,7 @@ def test_wal_concurrent_reader_during_write(tmp_path):
     # Reader: open separate connection, start read
     reader = sqlite3.connect(db_path)
     reader.enable_load_extension(True)
-    reader.load_extension("dist/vec0")
+    reader.load_extension(os.environ.get("VEC_TEST_EXTENSION", "dist/vec0"), entrypoint="sqlite3_vec_init")
 
     # Reader sees 10 rows
     count_before = reader.execute("SELECT count(*) FROM v").fetchone()[0]
