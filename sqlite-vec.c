@@ -1264,18 +1264,7 @@ static int int8_vec_from_value(sqlite3_value *value, i8 **vector,
   return SQLITE_ERROR;
 }
 
-/**
- * @brief Extract a vector from a sqlite3_value. Can be a float32, int8, or bit
- * vector.
- *
- * @param value: the sqlite3_value to read from.
- * @param vector: Output pointer to vector data.
- * @param dimensions: Output number of dimensions
- * @param dimensions: Output vector element type
- * @param cleanup
- * @param pzErrorMessage
- * @return int SQLITE_OK on success, error code otherwise
- */
+
 static int halfvec_from_value(sqlite3_value *value, void **vector,
                              size_t *dimensions, vector_cleanup *cleanup,
                              char **error) {
@@ -1291,6 +1280,18 @@ static int halfvec_from_value(sqlite3_value *value, void **vector,
   return SQLITE_OK;
 }
 
+/**
+ * @brief Extract a vector from a sqlite3_value. Can be a float32, float16, int8, or bit
+ * vector.
+ *
+ * @param value: the sqlite3_value to read from.
+ * @param vector: Output pointer to vector data.
+ * @param dimensions: Output number of dimensions
+ * @param dimensions: Output vector element type
+ * @param cleanup
+ * @param pzErrorMessage
+ * @return int SQLITE_OK on success, error code otherwise
+ */
 int vector_from_value(sqlite3_value *value, void **vector, size_t *dimensions,
                       enum VectorElementType *element_type,
                       vector_cleanup *cleanup, char **pzErrorMessage) {
