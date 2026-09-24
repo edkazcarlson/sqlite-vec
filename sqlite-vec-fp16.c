@@ -82,6 +82,9 @@ static f32 vec_half_distance_scalar(const void *a, const f32 *q, size_t n,
 #if defined(SQLITE_VEC_ENABLE_AVX) && (defined(__GNUC__) || defined(__clang__)) && \
     (defined(__x86_64__) || defined(__i386__))
 #include <immintrin.h>
+#ifdef _MSC_VER
+#include <intrin.h>
+#endif
 #define VEC_HAVE_F16C 1
 __attribute__((target("avx,f16c")))
 static f32 vec_half_distance_f16c(const void *a, const f32 *q, size_t n,
@@ -136,8 +139,17 @@ static f32 vec_half_distance_f16c(const void *a, const f32 *q, size_t n,
 static vec_half_distance_fn vec_half_kernel(void) {
 #ifdef VEC_HAVE_F16C
   /* Check AVX as well: older compilers' F16C check does not include OS support. */
+#ifdef _MSC_VER
+  /* clang targeting the MSVC runtime has no libgcc __cpu_model. */
+  int cpu[4];
+  __cpuid(cpu, 1);
+  const int required = (1 << 27) | (1 << 28) | (1 << 29);
+  if ((cpu[2] & required) == required && (_xgetbv(0) & 6) == 6)
+    return vec_half_distance_f16c;
+#else
   if (__builtin_cpu_supports("avx") && __builtin_cpu_supports("f16c"))
     return vec_half_distance_f16c;
+#endif
 #endif
   return vec_half_distance_scalar;
 }
