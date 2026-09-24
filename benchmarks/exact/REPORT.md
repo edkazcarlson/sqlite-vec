@@ -74,12 +74,12 @@ The initial ablations used these flags in addition to the common build flags:
 | `combined` | All three flags above |
 | `fma` | All three flags above, plus `-mfma` |
 
-The final source promotes these to the default `SQLITE_VEC_EXACT_SIMD`,
-`SQLITE_VEC_EXACT_HEAP`, and `SQLITE_VEC_FILTER_FIRST` switches. It also retains
+The measured final build promoted these to the default `SQLITE_VEC_EXACT_SIMD`,
+`SQLITE_VEC_EXACT_HEAP`, and `SQLITE_VEC_FILTER_FIRST` switches. It retained
 the original aligned L2 kernel because replacing it did not produce a reliable
-benefit. Consequently the experimental `combined` build is not byte-identical
-to the final build. Use current switches for new ablations, and recorded binary
-hashes to identify historical measurements.
+benefit. The current source removes those unrelated float32 search changes;
+use the preserved builds and recorded binary hashes to reproduce or interpret
+these historical measurements.
 
 ### Apparent regression checked
 

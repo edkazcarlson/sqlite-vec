@@ -2048,36 +2048,6 @@ void test_diskann_prune_select_max_neighbors_1() {
   printf("  All diskann_prune_select_max_neighbors_1 tests passed.\n");
 }
 
-static void test_min_idx_ordering(void) {
-  float distances[64];
-  uint8_t candidates[8], taken[8];
-  int32_t actual[64], expected[64], used;
-  for (int trial = 0; trial < 100; trial++) {
-    for (int i = 0; i < 64; i++) distances[i] = (float)((i * 17 + trial * 3) % 11);
-    if (trial == 1) distances[5] = NAN;
-    if (trial == 2) distances[5] = INFINITY;
-    for (int i = 0; i < 8; i++) candidates[i] = trial == 0 ? 0 : (uint8_t)(trial * 13 + i * 17);
-    for (int k = 1; k <= 64; k++) {
-      /* Independent legacy ordering oracle, including NaN and equal distances. */
-      uint8_t selected[64] = {0};
-      int count = 0;
-      for (; count < k; count++) {
-        int best = -1;
-        for (int i = 0; i < 64; i++) {
-          if (selected[i] || !(candidates[i / 8] & (1 << (i % 8)))) continue;
-          if (best < 0 || distances[i] <= distances[best]) best = i;
-        }
-        if (best < 0) break;
-        expected[count] = best;
-        selected[best] = 1;
-      }
-      assert(min_idx(distances, 64, candidates, actual, k, taken, &used) == SQLITE_OK);
-      assert(used == count);
-      assert(memcmp(actual, expected, count * sizeof(int32_t)) == 0);
-    }
-  }
-}
-
 static void test_half_sql_lifecycle(void) {
   sqlite3 *db;
   char *error = NULL;
@@ -2116,7 +2086,6 @@ int main() {
   printf("SIMD: none\n");
 #endif
   test_vec0_token_next();
-  test_min_idx_ordering();
   test_half_sql_lifecycle();
   test_vec0_scanner();
   test_vec0_parse_vector_column();

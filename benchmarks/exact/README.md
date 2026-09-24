@@ -92,16 +92,10 @@ build order on alternating repetitions. It expects preserved builds named
 recorded in [the results report](REPORT.md); those frozen sources are preserved
 locally alongside the binaries.
 
-For new ablations with the current source, disable or enable these independent
-compile-time switches (all default to 1):
-
-| Switch | Behavior |
-|---|---|
-| `SQLITE_VEC_EXACT_SIMD` | AVX cosine and L2 tail kernels; existing aligned L2 remains |
-| `SQLITE_VEC_EXACT_HEAP` | Heap top-k selection for k > 1, preserving ties |
-| `SQLITE_VEC_FILTER_FIRST` | Apply candidate filters before reading vector chunks |
-
-These switches do not disable fp16 support. A portable scalar build uses
+The SIMD, heap, and filter ablations require their preserved experimental
+sources and builds; those switches are not available in the current source.
+For current float32-versus-float16 comparisons, use `bench.py` with builds from
+this checkout. A portable scalar build uses
 `make loadable OMIT_SIMD=1 prefix=dist/scalar`; `vec_debug()` identifies the
 active half conversion kernel. The FMA experiment additionally used `-mfma` and
 requires compatible hardware; it is not a default build requirement.

@@ -6,7 +6,7 @@ Cargo.toml: ../../VERSION Cargo.toml.tmpl
 		VERSION=$(VERSION) envsubst < Cargo.toml.tmpl > $@
 
 sqlite-vec.c: ../../sqlite-vec.c $(wildcard ../../sqlite-vec-*.c) ../../scripts/amalgamate.py
-		uv run --no-project python ../../scripts/amalgamate.py $< > $@
+		python3 ../../scripts/amalgamate.py $< > $@
 
 sqlite-vec.h: ../../sqlite-vec.h
 		cp $< $@

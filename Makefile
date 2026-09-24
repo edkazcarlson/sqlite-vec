@@ -167,7 +167,7 @@ TARGET_AMALGAMATION=$(prefix)/sqlite-vec.c
 amalgamation: $(TARGET_AMALGAMATION)
 
 $(TARGET_AMALGAMATION): sqlite-vec.c $(wildcard sqlite-vec-*.c) scripts/amalgamate.py $(prefix)
-	uv run --no-project python scripts/amalgamate.py sqlite-vec.c > $@
+	python3 scripts/amalgamate.py sqlite-vec.c > $@
 
 FORMAT_FILES=sqlite-vec.h sqlite-vec.c
 format: $(FORMAT_FILES)

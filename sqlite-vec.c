@@ -73,17 +73,6 @@ typedef size_t usize;
 #define SQLITE_VEC_ENABLE_RESCORE 1
 #endif
 
-/* Disable individual exact-search optimizations for controlled benchmarks. */
-#ifndef SQLITE_VEC_EXACT_SIMD
-#define SQLITE_VEC_EXACT_SIMD 1
-#endif
-#ifndef SQLITE_VEC_EXACT_HEAP
-#define SQLITE_VEC_EXACT_HEAP 1
-#endif
-#ifndef SQLITE_VEC_FILTER_FIRST
-#define SQLITE_VEC_FILTER_FIRST 1
-#endif
-
 enum VectorElementType {
   // clang-format off
   SQLITE_VEC_ELEMENT_TYPE_FLOAT32 = 223 + 0,
@@ -105,52 +94,6 @@ enum Vec0DistanceMetrics {
 #include <immintrin.h>
 #define PORTABLE_ALIGN32 __attribute__((aligned(32)))
 #define PORTABLE_ALIGN64 __attribute__((aligned(64)))
-
-#if SQLITE_VEC_EXACT_SIMD
-static f32 vec_avx_sum(__m256 value) {
-  __m128 sum = _mm_add_ps(_mm256_castps256_ps128(value), _mm256_extractf128_ps(value, 1));
-  sum = _mm_add_ps(sum, _mm_movehl_ps(sum, sum));
-  sum = _mm_add_ss(sum, _mm_shuffle_ps(sum, sum, 1));
-  return _mm_cvtss_f32(sum);
-}
-
-static f32 vec_avx_distance(const f32 *a, const f32 *b, size_t n, int metric,
-                            f32 query_norm) {
-  __m256 sums[4] = {_mm256_setzero_ps(), _mm256_setzero_ps(), _mm256_setzero_ps(), _mm256_setzero_ps()};
-  __m256 norms[4] = {_mm256_setzero_ps(), _mm256_setzero_ps(), _mm256_setzero_ps(), _mm256_setzero_ps()};
-  size_t i = 0;
-  for (; i + 32 <= n; i += 32) {
-    for (int j = 0; j < 4; j++) {
-      __m256 x = _mm256_loadu_ps(a + i + j * 8);
-      __m256 y = _mm256_loadu_ps(b + i + j * 8);
-      if (metric == VEC0_DISTANCE_METRIC_COSINE) {
-        sums[j] = _mm256_add_ps(sums[j], _mm256_mul_ps(x, y));
-        norms[j] = _mm256_add_ps(norms[j], _mm256_mul_ps(x, x));
-      } else {
-        __m256 diff = _mm256_sub_ps(x, y);
-        sums[j] = _mm256_add_ps(sums[j], _mm256_mul_ps(diff, diff));
-      }
-    }
-  }
-  for (; i + 8 <= n; i += 8) {
-    __m256 x = _mm256_loadu_ps(a + i), y = _mm256_loadu_ps(b + i);
-    if (metric == VEC0_DISTANCE_METRIC_COSINE) {
-      sums[0] = _mm256_add_ps(sums[0], _mm256_mul_ps(x, y));
-      norms[0] = _mm256_add_ps(norms[0], _mm256_mul_ps(x, x));
-    } else {
-      __m256 diff = _mm256_sub_ps(x, y);
-      sums[0] = _mm256_add_ps(sums[0], _mm256_mul_ps(diff, diff));
-    }
-  }
-  f32 sum = vec_avx_sum(_mm256_add_ps(_mm256_add_ps(sums[0], sums[1]), _mm256_add_ps(sums[2], sums[3])));
-  f32 norm = vec_avx_sum(_mm256_add_ps(_mm256_add_ps(norms[0], norms[1]), _mm256_add_ps(norms[2], norms[3])));
-  for (; i < n; i++) {
-    if (metric == VEC0_DISTANCE_METRIC_COSINE) { sum += a[i] * b[i]; norm += a[i] * a[i]; }
-    else { f32 diff = a[i] - b[i]; sum += diff * diff; }
-  }
-  return metric == VEC0_DISTANCE_METRIC_COSINE ? 1 - sum / (sqrtf(norm) * query_norm) : sqrtf(sum);
-}
-#endif
 
 static f32 l2_sqr_float_avx(const void *pVect1v, const void *pVect2v,
                             const void *qty_ptr) {
@@ -477,10 +420,6 @@ static f32 l2_sqr_int8(const void *pA, const void *pB, const void *pD) {
 }
 
 static f32 distance_l2_sqr_float(const void *a, const void *b, const void *d) {
-#if defined(SQLITE_VEC_ENABLE_AVX) && SQLITE_VEC_EXACT_SIMD
-  if (*(const size_t *)d >= 8 && *(const size_t *)d % 16 != 0)
-    return vec_avx_distance(a, b, *(const size_t *)d, VEC0_DISTANCE_METRIC_L2, 0);
-#endif
 #ifdef SQLITE_VEC_ENABLE_NEON
   if ((*(const size_t *)d) > 16) {
     return l2_sqr_float_neon(a, b, d);
@@ -553,11 +492,6 @@ static double distance_l1_f32(const void *a, const void *b, const void *d) {
 
 static f32 distance_cosine_float(const void *pVect1v, const void *pVect2v,
                                  const void *qty_ptr) {
-#if defined(SQLITE_VEC_ENABLE_AVX) && SQLITE_VEC_EXACT_SIMD
-  size_t n = *(const size_t *)qty_ptr;
-  if (n >= 8)
-    return vec_avx_distance(pVect1v, pVect2v, n, VEC0_DISTANCE_METRIC_COSINE, vec_query_norm(pVect2v, n));
-#endif
 #ifdef SQLITE_VEC_ENABLE_NEON
   if ((*(const size_t *)qty_ptr) > 16) {
     return cosine_float_neon(pVect1v, pVect2v, qty_ptr);
@@ -3991,8 +3925,6 @@ void vec0_free(vec0_vtab *p) {
   }
 
   for (int i = 0; i < p->numMetadataColumns; i++) {
-    sqlite3_free(p->shadowMetadataChunksNames[i]);
-    p->shadowMetadataChunksNames[i] = NULL;
     sqlite3_free(p->metadata_columns[i].name);
     p->metadata_columns[i].name = NULL;
   }
@@ -6743,53 +6675,64 @@ int min_idx(const f32 *distances, i32 n, u8 *candidates, i32 *out, i32 k,
   assert(k > 0);
   assert(k <= n);
 
-#if SQLITE_VEC_EXACT_HEAP
-  if (k > 1) {
-    /* Preserve legacy NaN behavior, which has no total ordering. */
-    for (int i = 0; i < n; i++)
-      if (bitmap_get(candidates, i) && isnan(distances[i])) goto legacy_min_idx;
-    int used = 0;
-    /* Equal distances prefer the later chunk offset, as the original <= scan did. */
-#define BETTER(a, b) (distances[(a)] < distances[(b)] || \
-                     (distances[(a)] == distances[(b)] && (a) > (b)))
-#define SIFT_DOWN(sz) do { \
-      int parent = 0; \
-      for (;;) { \
-        int left = 2 * parent + 1, right = left + 1, worst = parent; \
-        if (left < (sz) && BETTER(out[worst], out[left])) worst = left; \
-        if (right < (sz) && BETTER(out[worst], out[right])) worst = right; \
-        if (worst == parent) break; \
-        i32 tmp = out[parent]; out[parent] = out[worst]; out[worst] = tmp; \
-        parent = worst; \
-      } \
-    } while (0)
-    for (int i = 0; i < n; i++) {
-      if (!bitmap_get(candidates, i)) continue;
-      if (used < k) {
-        int child = used++;
-        out[child] = i;
-        while (child > 0) {
-          int parent = (child - 1) / 2;
-          if (!BETTER(out[parent], out[child])) break;
-          i32 tmp = out[parent]; out[parent] = out[child]; out[child] = tmp;
-          child = parent;
-        }
-      } else if (BETTER(i, out[0])) {
-        out[0] = i;
-        SIFT_DOWN(used);
-      }
+#ifdef SQLITE_VEC_EXPERIMENTAL_MIN_IDX
+  // Max-heap variant: O(n log k) single-pass.
+  // out[0..heap_size-1] stores indices; heap ordered by distances descending
+  // so out[0] is always the index of the LARGEST distance in the top-k.
+  (void)bTaken;
+  int heap_size = 0;
+
+  #define HEAP_SIFT_UP(pos) do {                          \
+    int _c = (pos);                                       \
+    while (_c > 0) {                                      \
+      int _p = (_c - 1) / 2;                              \
+      if (distances[out[_p]] < distances[out[_c]]) {      \
+        i32 _tmp = out[_p]; out[_p] = out[_c]; out[_c] = _tmp; \
+        _c = _p;                                          \
+      } else break;                                       \
+    }                                                     \
+  } while(0)
+
+  #define HEAP_SIFT_DOWN(pos, sz) do {                    \
+    int _p = (pos);                                       \
+    for (;;) {                                            \
+      int _l = 2*_p + 1, _r = 2*_p + 2, _largest = _p;  \
+      if (_l < (sz) && distances[out[_l]] > distances[out[_largest]]) \
+        _largest = _l;                                    \
+      if (_r < (sz) && distances[out[_r]] > distances[out[_largest]]) \
+        _largest = _r;                                    \
+      if (_largest == _p) break;                          \
+      i32 _tmp = out[_p]; out[_p] = out[_largest]; out[_largest] = _tmp; \
+      _p = _largest;                                      \
+    }                                                     \
+  } while(0)
+
+  for (int i = 0; i < n; i++) {
+    if (!bitmap_get(candidates, i))
+      continue;
+    if (heap_size < k) {
+      out[heap_size] = i;
+      heap_size++;
+      HEAP_SIFT_UP(heap_size - 1);
+    } else if (distances[i] < distances[out[0]]) {
+      out[0] = i;
+      HEAP_SIFT_DOWN(0, heap_size);
     }
-    for (int end = used - 1; end > 0; end--) {
-      i32 tmp = out[0]; out[0] = out[end]; out[end] = tmp;
-      SIFT_DOWN(end);
-    }
-#undef SIFT_DOWN
-#undef BETTER
-    *k_used = used;
-    return SQLITE_OK;
   }
-legacy_min_idx:
-#endif
+
+  // Heapsort to produce ascending order.
+  for (int i = heap_size - 1; i > 0; i--) {
+    i32 tmp = out[0]; out[0] = out[i]; out[i] = tmp;
+    HEAP_SIFT_DOWN(0, i);
+  }
+
+  #undef HEAP_SIFT_UP
+  #undef HEAP_SIFT_DOWN
+
+  *k_used = heap_size;
+  return SQLITE_OK;
+
+#else
   // Original: O(n*k) repeated linear scan with bitmap.
   bitmap_clear(bTaken, n);
 
@@ -6816,7 +6759,7 @@ legacy_min_idx:
   }
   *k_used = k;
   return SQLITE_OK;
-
+#endif
 }
 
 int vec0_get_metadata_text_long_value(
@@ -7487,11 +7430,6 @@ int vec0Filter_knn_chunks_iter(vec0_vtab *p, sqlite3_stmt *stmtChunks,
 
   f32 *halfQuery = NULL;
   f32 halfQueryNorm = 0;
-#if defined(SQLITE_VEC_ENABLE_AVX) && SQLITE_VEC_EXACT_SIMD
-  f32 queryNorm = vector_column->element_type == SQLITE_VEC_ELEMENT_TYPE_FLOAT32 &&
-                  vector_column->distance_metric == VEC0_DISTANCE_METRIC_COSINE
-                  ? vec_query_norm(queryVector, vector_column->dimensions) : 0;
-#endif
   vec_half_distance_fn halfDistance = vec_half_kernel();
   sqlite3_blob *metadataBlobs[VEC0_MAX_METADATA_COLUMNS] = {0};
 
@@ -7634,7 +7572,6 @@ int vec0Filter_knn_chunks_iter(vec0_vtab *p, sqlite3_stmt *stmtChunks,
       goto cleanup;
     }
 
-#if !SQLITE_VEC_FILTER_FIRST
     // open the vector chunk blob for the current chunk
     rc = sqlite3_blob_open(p->db, p->schemaName,
                            p->shadowVectorChunksNames[vectorColumnIdx],
@@ -7665,8 +7602,6 @@ int vec0Filter_knn_chunks_iter(vec0_vtab *p, sqlite3_stmt *stmtChunks,
       rc = SQLITE_ERROR;
       goto cleanup;
     }
-
-#endif
 
     bitmap_copy(b, chunkValidity, p->chunk_size);
     if (arrayRowidsIn) {
@@ -7715,43 +7650,6 @@ int vec0Filter_knn_chunks_iter(vec0_vtab *p, sqlite3_stmt *stmtChunks,
     }
 
 
-#if SQLITE_VEC_FILTER_FIRST
-    int anyCandidates = 0;
-    for (int i = 0; i < p->chunk_size / CHAR_BIT; i++) anyCandidates |= b[i];
-    if (!anyCandidates) continue;
-    // open the vector chunk blob for the current chunk
-    rc = sqlite3_blob_open(p->db, p->schemaName,
-                           p->shadowVectorChunksNames[vectorColumnIdx],
-                           "vectors", chunk_id, 0, &blobVectors);
-    if (rc != SQLITE_OK) {
-      vtab_set_error(&p->base, "could not open vectors blob for chunk %lld",
-                     chunk_id);
-      rc = SQLITE_ERROR;
-      goto cleanup;
-    }
-
-    i64 currentBaseVectorsSize = sqlite3_blob_bytes(blobVectors);
-    i64 expectedBaseVectorsSize =
-        p->chunk_size * vector_column_byte_size(*vector_column);
-    if (currentBaseVectorsSize != expectedBaseVectorsSize) {
-      // IMP: V16465_00535
-      vtab_set_error(
-          &p->base,
-          "vectors blob size doesn't match - expected %lld, found %lld",
-          expectedBaseVectorsSize, currentBaseVectorsSize);
-      rc = SQLITE_ERROR;
-      goto cleanup;
-    }
-    rc = sqlite3_blob_read(blobVectors, baseVectors, currentBaseVectorsSize, 0);
-
-    if (rc != SQLITE_OK) {
-      vtab_set_error(&p->base, "vectors blob read error for %lld", chunk_id);
-      rc = SQLITE_ERROR;
-      goto cleanup;
-    }
-
-#endif
-
     for (int i = 0; i < p->chunk_size; i++) {
       if (!bitmap_get(b, i)) {
         continue;
@@ -7779,12 +7677,6 @@ int vec0Filter_knn_chunks_iter(vec0_vtab *p, sqlite3_stmt *stmtChunks,
           break;
         }
         case VEC0_DISTANCE_METRIC_COSINE: {
-#if defined(SQLITE_VEC_ENABLE_AVX) && SQLITE_VEC_EXACT_SIMD
-          if (vector_column->dimensions >= 8)
-            result = vec_avx_distance(base_i, queryVector, vector_column->dimensions,
-                                      VEC0_DISTANCE_METRIC_COSINE, queryNorm);
-          else
-#endif
           result = distance_cosine_float(base_i, (f32 *)queryVector,
                                          &vector_column->dimensions);
           break;
@@ -10944,7 +10836,7 @@ static void vec_debug(sqlite3_context *context, int argc, sqlite3_value **argv) 
 #ifdef VEC_HAVE_F16C
   if (vec_half_kernel() == vec_half_distance_f16c) kernel = "f16c";
 #endif
-  char *text = sqlite3_mprintf(SQLITE_VEC_DEBUG_STRING "\nFloat16 kernel: %s; accumulation: fp32; exact_simd=%d heap=%d filter_first=%d", kernel, SQLITE_VEC_EXACT_SIMD, SQLITE_VEC_EXACT_HEAP, SQLITE_VEC_FILTER_FIRST);
+  char *text = sqlite3_mprintf(SQLITE_VEC_DEBUG_STRING "\nFloat16 kernel: %s; accumulation: fp32", kernel);
   if (!text) { sqlite3_result_error_nomem(context); return; }
   sqlite3_result_text(context, text, -1, sqlite3_free);
 }
