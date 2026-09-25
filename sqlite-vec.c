@@ -11,6 +11,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef SQLITE_VEC_ENABLE_AVX
+#include <immintrin.h>
+#endif
+
 #ifdef SQLITE_VEC_DEBUG
 #include <stdio.h>
 #endif
@@ -91,7 +95,6 @@ enum Vec0DistanceMetrics {
 #include "sqlite-vec-fp16.c"
 
 #ifdef SQLITE_VEC_ENABLE_AVX
-#include <immintrin.h>
 #define PORTABLE_ALIGN32 __attribute__((aligned(32)))
 #define PORTABLE_ALIGN64 __attribute__((aligned(64)))
 
@@ -1543,8 +1546,18 @@ static void vec_half_scalar_distance(sqlite3_context *context, const void *a,
   f32 *query = sqlite3_malloc64(n * sizeof(f32));
   if (!query) { sqlite3_result_error_nomem(context); return; }
   vec_half_expand(b, query, n);
-  f32 norm = metric == VEC0_DISTANCE_METRIC_COSINE ? vec_query_norm(query, n) : 0;
-  sqlite3_result_double(context, vec_half_kernel()(a, query, n, metric, norm));
+  switch (metric) {
+  case VEC0_DISTANCE_METRIC_L2:
+    sqlite3_result_double(context, distance_l2_sqr_float16(a, query, n));
+    break;
+  case VEC0_DISTANCE_METRIC_L1:
+    sqlite3_result_double(context, distance_l1_float16(a, query, n));
+    break;
+  case VEC0_DISTANCE_METRIC_COSINE:
+    sqlite3_result_double(context, distance_cosine_float16(a, query, n,
+                                                         vec_query_norm(query, n)));
+    break;
+  }
   sqlite3_free(query);
 }
 
@@ -7431,7 +7444,6 @@ int vec0Filter_knn_chunks_iter(vec0_vtab *p, sqlite3_stmt *stmtChunks,
 
   f32 *halfQuery = NULL;
   f32 halfQueryNorm = 0;
-  vec_half_distance_fn halfDistance = vec_half_kernel();
   sqlite3_blob *metadataBlobs[VEC0_MAX_METADATA_COLUMNS] = {0};
 
   // 6 * (k * 4) + (k * 2) + (chunk_size / 8) + (chunk_size * dimensions * 4)
@@ -7658,11 +7670,25 @@ int vec0Filter_knn_chunks_iter(vec0_vtab *p, sqlite3_stmt *stmtChunks,
 
       f32 result;
       switch (vector_column->element_type) {
-      case SQLITE_VEC_ELEMENT_TYPE_FLOAT16:
-        result = halfDistance((const u8 *)baseVectors + i * vector_column->dimensions * 2,
-                              halfQuery, vector_column->dimensions,
-                              vector_column->distance_metric, halfQueryNorm);
+      case SQLITE_VEC_ELEMENT_TYPE_FLOAT16: {
+        const u8 *base_i =
+            (const u8 *)baseVectors + i * vector_column->dimensions * 2;
+        switch (vector_column->distance_metric) {
+        case VEC0_DISTANCE_METRIC_L2:
+          result = distance_l2_sqr_float16(base_i, halfQuery,
+                                           vector_column->dimensions);
+          break;
+        case VEC0_DISTANCE_METRIC_L1:
+          result = distance_l1_float16(base_i, halfQuery,
+                                       vector_column->dimensions);
+          break;
+        case VEC0_DISTANCE_METRIC_COSINE:
+          result = distance_cosine_float16(base_i, halfQuery,
+                                           vector_column->dimensions, halfQueryNorm);
+          break;
+        }
         break;
+      }
       case SQLITE_VEC_ELEMENT_TYPE_FLOAT32: {
         const f32 *base_i =
             ((f32 *)baseVectors) + (i * vector_column->dimensions);
@@ -10835,7 +10861,7 @@ static void vec_debug(sqlite3_context *context, int argc, sqlite3_value **argv) 
   UNUSED_PARAMETER(argv);
   const char *kernel = "scalar";
 #ifdef VEC_HAVE_F16C
-  if (vec_half_kernel() == vec_half_distance_f16c) kernel = "f16c";
+  if (vec_half_has_f16c()) kernel = "f16c";
 #endif
   char *text = sqlite3_mprintf(SQLITE_VEC_DEBUG_STRING "\nFloat16 kernel: %s; accumulation: fp32", kernel);
   if (!text) { sqlite3_result_error_nomem(context); return; }
