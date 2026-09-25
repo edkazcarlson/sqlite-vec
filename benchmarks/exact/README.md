@@ -83,19 +83,23 @@ Poll the log; stop with `kill -- -<PGID>`. A sandbox that destroys its process
 namespace on exit requires launching the detached job in a persistent host
 session. A read-only uv cache can be redirected with `UV_CACHE_DIR=/tmp/vec-uv`.
 
-## Optimization experiments
+## Current build comparisons
 
-`experiments.py` runs the recorded one-change-at-a-time experiments, reversing
-build order on alternating repetitions. It expects preserved builds named
-`baseline`, `fp16-initial`, `simd`, `heap`, `filter`, `combined`, and `fma` under
-`results/builds/`. The initial measurements used the experimental compile flags
-recorded in [the results report](REPORT.md); those frozen sources are preserved
-locally alongside the binaries.
-
-The SIMD, heap, and filter ablations require their preserved experimental
-sources and builds; those switches are not available in the current source.
-For current float32-versus-float16 comparisons, use `bench.py` with builds from
-this checkout. A portable scalar build uses
+The historical SIMD, heap, and filter ablations in [the results report](REPORT.md)
+used experimental switches that are no longer available in this source. For
+current float32-versus-float16 comparisons, use `bench.py` with a fresh build
+from this checkout. A portable scalar build uses
 `make loadable OMIT_SIMD=1 prefix=dist/scalar`; `vec_debug()` identifies the
-active half conversion kernel. The FMA experiment additionally used `-mfma` and
-requires compatible hardware; it is not a default build requirement.
+active half conversion kernel.
+
+The explicit SIMD paths are different by metric. With AVX enabled, float32 L2
+uses AVX when the dimension is divisible by 16, while float32 cosine uses the
+scalar C kernel. Float16 L2 and cosine use AVX/F16C when the CPU supports it.
+The half values are widened and distances accumulate in float32. To distinguish
+these kernel differences from the storage-format comparison, run the same
+workload with `OMIT_SIMD=1` as well. That Make option disables the explicit SIMD
+kernels; the compiler may still optimize scalar C code.
+
+The [current 1k/5k comparison](results/current-small-summary.md) records both
+builds with two repetitions. Its [AVX](results/current-small-avx.json) and
+[scalar](results/current-small-scalar.json) JSON files contain the raw samples.
