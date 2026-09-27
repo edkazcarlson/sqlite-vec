@@ -1,0 +1,4 @@
+results/builds/
+results/work/
+results/*.log
+.venv/

@@ -67,6 +67,15 @@ From an x64 MSVC developer shell, generate `sqlite-vec.h` and vendor SQLite
 headers as above, then run `./scripts/build-windows.ps1`. The default preserves
 the existing Windows release CPU target. Use `-Simd avx2` to opt into the existing
 AVX floating-point and AVX2 Hamming kernels. This uses `/arch:AVX2` and
-`SQLITE_VEC_ENABLE_AVX`, and requires an AVX2-capable machine; there is no runtime
-fallback in this build. `-OutputDirectory dist/avx2` keeps it beside a default
+`SQLITE_VEC_ENABLE_AVX`, and requires an AVX2-capable machine for the existing FP32/Hamming kernels. `-OutputDirectory dist/avx2` keeps it beside a default
 build. Official Windows packages continue to use the default build.
+
+### Optional F16C conversion
+
+`SQLITE_VEC_ENABLE_F16C` includes runtime-guarded x86 half-to-float kernels on
+GCC, Clang, and native MSVC. It does not require globally enabling AVX/AVX2.
+The Windows default build enables this option; `-Simd scalar` omits explicit
+SIMD backends. CPU AVX/F16C/OSXSAVE and OS XMM/YMM state support are checked
+before selecting the kernel. Unsupported machines use portable conversion.
+Existing GCC/Clang AVX builds also include the F16C path. This check protects
+only F16C: an AVX2 build still requires AVX2 hardware for its other kernels.

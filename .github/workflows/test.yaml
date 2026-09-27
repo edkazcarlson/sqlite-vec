@@ -54,7 +54,7 @@ jobs:
     runs-on: windows-2022
     strategy:
       matrix:
-        simd: [default, avx2]
+        simd: [default, scalar, avx2]
     steps:
       - uses: actions/checkout@v4
       - uses: ilammy/msvc-dev-cmd@v1
@@ -65,6 +65,7 @@ jobs:
         shell: bash
       - run: make sqlite-vec.h
       - run: ./scripts/build-windows.ps1 -Simd ${{ matrix.simd }}
+      - run: ./scripts/test-fp16-windows.ps1
       - run: uv sync --directory tests
       - run: make test-loadable
         shell: bash

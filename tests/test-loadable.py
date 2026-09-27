@@ -104,6 +104,7 @@ FUNCTIONS = [
     "vec_distance_hamming",
     "vec_distance_l1",
     "vec_distance_l2",
+    "vec_f16",
     "vec_f32",
     "vec_int8",
     "vec_length",
@@ -161,7 +162,12 @@ def test_vec_version():
 def test_vec_debug():
     vec_debug = lambda *args: db.execute("select vec_debug()", args).fetchone()[0]
     d = vec_debug().split("\n")
-    assert len(d) == 4
+    assert len(d) == 5
+    assert d[4].startswith(("Float16 kernel: f16c; accumulation: fp32", "Float16 kernel: scalar; accumulation: fp32"))
+
+
+def test_vec_f16():
+    assert db.execute("select vec_f16('[1,2]')").fetchone()[0] == bytes.fromhex("003c0040")
 
 
 def test_vec_bit():

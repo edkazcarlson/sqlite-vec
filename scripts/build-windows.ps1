@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('default', 'avx2')][string]$Simd = 'default',
+    [ValidateSet('default', 'scalar', 'avx2')][string]$Simd = 'default',
     [string]$OutputDirectory = 'dist'
 )
 $ErrorActionPreference = 'Stop'
@@ -12,6 +12,9 @@ try {
     $output = (Resolve-Path $OutputDirectory).Path
     $compilerArgs = @('/nologo', '/W4', '/O2', '/fp:precise', '/LD', '/Ivendor',
         "/Fo$output/vec0.obj", "/Fe$output/vec0.dll")
+    if ($Simd -ne 'scalar') {
+        $compilerArgs += '/DSQLITE_VEC_ENABLE_F16C'
+    }
     if ($Simd -eq 'avx2') {
         $compilerArgs += @('/arch:AVX2', '/DSQLITE_VEC_ENABLE_AVX')
     }
