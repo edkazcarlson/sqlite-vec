@@ -1,0 +1,6 @@
+{
+  "complete": true,
+  "cases": 600,
+  "queries_per_case": 20,
+  "row_cap": 2000
+}

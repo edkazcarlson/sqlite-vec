@@ -1,0 +1,22 @@
+[
+  {
+    "label": "baseline",
+    "pytest": ".............................................                            [100%]\n45 passed in 0.47s",
+    "additional_sql": "ties, deleted rows, partial chunks, filters, k=0/k>eligible: passed"
+  },
+  {
+    "label": "sse2_b8",
+    "pytest": ".............................................                            [100%]\n45 passed in 0.44s",
+    "additional_sql": "ties, deleted rows, partial chunks, filters, k=0/k>eligible: passed"
+  },
+  {
+    "label": "sse2_b2",
+    "pytest": ".............................................                            [100%]\n45 passed in 0.43s",
+    "additional_sql": "ties, deleted rows, partial chunks, filters, k=0/k>eligible: passed"
+  },
+  {
+    "label": "magic_branch_b1",
+    "pytest": ".............................................                            [100%]\n45 passed in 0.45s",
+    "additional_sql": "ties, deleted rows, partial chunks, filters, k=0/k>eligible: passed"
+  }
+]

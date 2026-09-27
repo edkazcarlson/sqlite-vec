@@ -1,0 +1,252 @@
+[
+  {
+    "name": "sse2_b8",
+    "kind": "sse",
+    "batch": 8,
+    "converter": "magic_select",
+    "id": 26,
+    "geomean_speedup": 6.082960928392261
+  },
+  {
+    "name": "sse2_b2",
+    "kind": "sse",
+    "batch": 2,
+    "converter": "magic_select",
+    "id": 24,
+    "geomean_speedup": 5.975106943738188
+  },
+  {
+    "name": "sse2_b4",
+    "kind": "sse",
+    "batch": 4,
+    "converter": "magic_select",
+    "id": 25,
+    "geomean_speedup": 5.929163400148374
+  },
+  {
+    "name": "sse2_b1",
+    "kind": "sse",
+    "batch": 1,
+    "converter": "magic_select",
+    "id": 23,
+    "geomean_speedup": 5.415736562534558
+  },
+  {
+    "name": "sse2_candidates4",
+    "kind": "across",
+    "batch": 4,
+    "converter": "magic_select",
+    "id": 27,
+    "geomean_speedup": 3.679245238310011
+  },
+  {
+    "name": "magic_branch_b2",
+    "kind": "scalar",
+    "batch": 2,
+    "converter": "magic_branch",
+    "id": 14,
+    "geomean_speedup": 2.822751289623109
+  },
+  {
+    "name": "magic_branch_b4",
+    "kind": "scalar",
+    "batch": 4,
+    "converter": "magic_branch",
+    "id": 15,
+    "geomean_speedup": 2.808182057190679
+  },
+  {
+    "name": "int_branch_b8",
+    "kind": "scalar",
+    "batch": 8,
+    "converter": "int_branch",
+    "id": 8,
+    "geomean_speedup": 2.796245106727652
+  },
+  {
+    "name": "magic_branch_b1",
+    "kind": "scalar",
+    "batch": 1,
+    "converter": "magic_branch",
+    "id": 13,
+    "geomean_speedup": 2.7571226372786612
+  },
+  {
+    "name": "int_branch_b2",
+    "kind": "scalar",
+    "batch": 2,
+    "converter": "int_branch",
+    "id": 6,
+    "geomean_speedup": 2.7206704668884023
+  },
+  {
+    "name": "int_branch_b1",
+    "kind": "scalar",
+    "batch": 1,
+    "converter": "int_branch",
+    "id": 5,
+    "geomean_speedup": 2.6478123124143504
+  },
+  {
+    "name": "magic_branch_b8",
+    "kind": "scalar",
+    "batch": 8,
+    "converter": "magic_branch",
+    "id": 16,
+    "geomean_speedup": 2.6205651732354514
+  },
+  {
+    "name": "int_branch_b4",
+    "kind": "scalar",
+    "batch": 4,
+    "converter": "int_branch",
+    "id": 7,
+    "geomean_speedup": 2.451137708101797
+  },
+  {
+    "name": "block4",
+    "kind": "block",
+    "batch": 1,
+    "converter": "magic_branch",
+    "width": 4,
+    "id": 21,
+    "geomean_speedup": 2.129343784962698
+  },
+  {
+    "name": "block8",
+    "kind": "block",
+    "batch": 1,
+    "converter": "magic_branch",
+    "width": 8,
+    "id": 22,
+    "geomean_speedup": 2.0750585511383632
+  },
+  {
+    "name": "original_inline_b4",
+    "kind": "scalar",
+    "batch": 4,
+    "converter": "original_inline",
+    "id": 30,
+    "geomean_speedup": 1.8094539891918353
+  },
+  {
+    "name": "int_select_b2",
+    "kind": "scalar",
+    "batch": 2,
+    "converter": "int_select",
+    "id": 10,
+    "geomean_speedup": 1.5615679036861352
+  },
+  {
+    "name": "original_inline_b1",
+    "kind": "scalar",
+    "batch": 1,
+    "converter": "original_inline",
+    "id": 28,
+    "geomean_speedup": 1.5539956434335451
+  },
+  {
+    "name": "original_inline_b8",
+    "kind": "scalar",
+    "batch": 8,
+    "converter": "original_inline",
+    "id": 31,
+    "geomean_speedup": 1.5490057730461808
+  },
+  {
+    "name": "magic_select_b4",
+    "kind": "scalar",
+    "batch": 4,
+    "converter": "magic_select",
+    "id": 19,
+    "geomean_speedup": 1.4819539827457944
+  },
+  {
+    "name": "magic_select_b2",
+    "kind": "scalar",
+    "batch": 2,
+    "converter": "magic_select",
+    "id": 18,
+    "geomean_speedup": 1.4463450045175787
+  },
+  {
+    "name": "original_b8",
+    "kind": "scalar",
+    "batch": 8,
+    "converter": "original",
+    "id": 4,
+    "geomean_speedup": 1.4376716989016605
+  },
+  {
+    "name": "int_select_b4",
+    "kind": "scalar",
+    "batch": 4,
+    "converter": "int_select",
+    "id": 11,
+    "geomean_speedup": 1.419283834465803
+  },
+  {
+    "name": "original_inline_b2",
+    "kind": "scalar",
+    "batch": 2,
+    "converter": "original_inline",
+    "id": 29,
+    "geomean_speedup": 1.3992914628570372
+  },
+  {
+    "name": "int_select_b8",
+    "kind": "scalar",
+    "batch": 8,
+    "converter": "int_select",
+    "id": 12,
+    "geomean_speedup": 1.386816837677399
+  },
+  {
+    "name": "magic_select_b8",
+    "kind": "scalar",
+    "batch": 8,
+    "converter": "magic_select",
+    "id": 20,
+    "geomean_speedup": 1.3762258508761807
+  },
+  {
+    "name": "int_select_b1",
+    "kind": "scalar",
+    "batch": 1,
+    "converter": "int_select",
+    "id": 9,
+    "geomean_speedup": 1.3722334652726247
+  },
+  {
+    "name": "magic_select_b1",
+    "kind": "scalar",
+    "batch": 1,
+    "converter": "magic_select",
+    "id": 17,
+    "geomean_speedup": 1.3231244149245067
+  },
+  {
+    "name": "original_b2",
+    "kind": "scalar",
+    "batch": 2,
+    "converter": "original",
+    "id": 2,
+    "geomean_speedup": 1.1953417989692696
+  },
+  {
+    "name": "original_b4",
+    "kind": "scalar",
+    "batch": 4,
+    "converter": "original",
+    "id": 3,
+    "geomean_speedup": 1.1432323355115621
+  },
+  {
+    "name": "original_b1",
+    "kind": "scalar",
+    "batch": 1,
+    "converter": "original",
+    "id": 1,
+    "geomean_speedup": 1.1067277084183478
+  }
+]

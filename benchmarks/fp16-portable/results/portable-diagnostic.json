@@ -1,0 +1,8 @@
+{
+  "name": "magic_branch_b1",
+  "kind": "scalar",
+  "batch": 1,
+  "converter": "magic_branch",
+  "id": 13,
+  "geomean_speedup": 2.7571226372786612
+}

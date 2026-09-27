@@ -1,0 +1,43 @@
+{
+  "status": "passed",
+  "row_limit_rejection_checks": 8,
+  "micro_cases": 4096,
+  "conversion_cases": 288,
+  "sql_cases": 600,
+  "timed_sql_queries": 12000,
+  "maximum_rows": 2000,
+  "production_source_hashes_match": {
+    "sqlite-vec-diskann.c": true,
+    "sqlite-vec-fp16.c": true,
+    "sqlite-vec-ivf-kmeans.c": true,
+    "sqlite-vec-ivf.c": true,
+    "sqlite-vec-rescore.c": true,
+    "sqlite-vec.c": true,
+    "sqlite-vec.h.tmpl": true
+  },
+  "binary_hashes_match": {
+    "baseline": true,
+    "sse2_b8": true,
+    "sse2_b2": true,
+    "magic_branch_b1": true,
+    "micro": true,
+    "micro_novec": true
+  },
+  "identical_sql_flags": [
+    "/nologo",
+    "/O2",
+    "/fp:precise",
+    "/MD",
+    "/LD",
+    "/std:c11",
+    "/Gy",
+    "/utf-8",
+    "/Qvec-report:2"
+  ],
+  "final_harness_hashes": {
+    "audit.py": "3ff2d76147d7487e64c3c5148683c185bbb3c23e7befa0de66014daf0a268cdd",
+    "kernels.py": "07ab9bd65ee1a149dd24d255ac9583a17b38854bd0e1dc96b79a4229b9fe4d98",
+    "report.py": "93d5e6f518b396f53e44894ef2acb33c30991e531d9df07419e859b71b4a0a51",
+    "run.py": "7de8c5902bdcd6905bb68d7517091da870d41f76f43dca92ee6b2b45cf537176"
+  }
+}

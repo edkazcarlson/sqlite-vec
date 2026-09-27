@@ -1,0 +1,4 @@
+build/
+results/work/
+results/*.log
+__pycache__/

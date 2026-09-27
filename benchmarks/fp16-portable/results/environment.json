@@ -1,0 +1,73 @@
+{
+  "cpu": "AMD Ryzen 7 5800H with Radeon Graphics",
+  "cpuid": {
+    "0:0": [
+      13,
+      1752462657,
+      1145913699,
+      1769238117
+    ],
+    "1:0": [
+      10817280,
+      68159488,
+      4275581451,
+      395049983
+    ],
+    "7:0": [
+      0,
+      563910569,
+      4195972,
+      16
+    ],
+    "80000002:0": [
+      541347137,
+      1702525266,
+      540483694,
+      808466485
+    ],
+    "80000003:0": [
+      1769414728,
+      1377855604,
+      1868915809,
+      1917263982
+    ],
+    "80000004:0": [
+      1768452193,
+      538997603,
+      538976288,
+      2105376
+    ]
+  },
+  "flags": {
+    "sse2": true,
+    "avx": true,
+    "f16c": true,
+    "osxsave": true,
+    "avx2": true,
+    "fma": true,
+    "avx512f": false
+  },
+  "compiler": "Microsoft (R) C/C++ Optimizing Compiler Version 19.50.35721 for x64",
+  "python": "3.12.14 (main, Aug 25 2026, 14:01:42) [MSC v.1944 64 bit (AMD64)]",
+  "numpy": "2.3.5",
+  "sqlite": "3.53.1",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "commit": "d8b33b250dd7c7e880005beb382df375409bb792",
+  "sources": {
+    "sqlite-vec-diskann.c": "69a4131994af33cd1ab7fc020308f2325f1b48c3c10ddf1dc766e62b000cd958",
+    "sqlite-vec-fp16.c": "a04e6835d03f1843fef36d9d838381713f9fdb505e8b9b36a6f1746e32eaa8a8",
+    "sqlite-vec-ivf-kmeans.c": "aaf703280d3dc3ff655b37b744dcb69bc29c250eb1b51ad2fe6b4042e50c3555",
+    "sqlite-vec-ivf.c": "5c7a5d2ded87e7959a2dbeeaa7ad555076801012d21e26d86167659b1b07294c",
+    "sqlite-vec-rescore.c": "07d2d6ec6ad773ecf61e7ba04a01cb5ba6a84199010d6390a3100e780f7ae9e9",
+    "sqlite-vec.c": "60310e3d517f156d68ed1f17425abb59d9108afc00ce7edc716a691388077cf8",
+    "sqlite-vec.h.tmpl": "dccf194cefa6d0441768f084a49c9386793a63483058b812766d99423a522f96",
+    "benchmarks\\fp16-portable\\run.py": "845aeff8f975e91a86e43b479ff07c0965ad12051298daacea68dae33b71569c",
+    "benchmarks\\fp16-portable\\kernels.py": "07ab9bd65ee1a149dd24d255ac9583a17b38854bd0e1dc96b79a4229b9fe4d98"
+  },
+  "sqlite_archive_sha256": "ea170e73e447703e8359308ca2e4366a3ae0c4304a8665896f068c736781c651",
+  "row_cap": 2000,
+  "command": [
+    "benchmarks/fp16-portable/run.py",
+    "all"
+  ]
+}

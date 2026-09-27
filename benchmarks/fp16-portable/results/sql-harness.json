@@ -1,0 +1,10 @@
+{
+  "command": [
+    "benchmarks/fp16-portable/run.py",
+    "sql",
+    "--resume"
+  ],
+  "run_sha256": "7de8c5902bdcd6905bb68d7517091da870d41f76f43dca92ee6b2b45cf537176",
+  "kernels_sha256": "07ab9bd65ee1a149dd24d255ac9583a17b38854bd0e1dc96b79a4229b9fe4d98",
+  "resume": true
+}

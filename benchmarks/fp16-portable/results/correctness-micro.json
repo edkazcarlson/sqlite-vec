@@ -1,0 +1,18 @@
+[
+  {
+    "novec": false,
+    "finite_patterns": 63488,
+    "general_patterns": 65536,
+    "mxcsr_modes": 4,
+    "distance_cases": 7488,
+    "status": "passed"
+  },
+  {
+    "novec": true,
+    "finite_patterns": 63488,
+    "general_patterns": 65536,
+    "mxcsr_modes": 4,
+    "distance_cases": 7488,
+    "status": "passed"
+  }
+]
