@@ -54,6 +54,35 @@ static f32 vec_half_at(const void *data, size_t i) {
   return vec_half_to_float(h);
 }
 
+/* Search inputs have passed vec_half_validate. The finite fast path avoids
+ * exceptional-value handling and the general decoder's subnormal shift loop.
+ * Subnormal half values become normal float32 values, so FTZ/DAZ are harmless.
+ * Keep vec_half_to_float general for public conversions, including NaN/Inf. */
+static inline f32 vec_half_to_float_finite(uint16_t h) {
+  u32 bits;
+  if (h & 0x7c00) {
+    bits = (((u32)h & 0x7fff) << 13) + 0x38000000u;
+  } else {
+    bits = 0x3f000000u | (h & 1023);
+    f32 small;
+    memcpy(&small, &bits, sizeof(small));
+    small -= 0.5f;
+    memcpy(&bits, &small, sizeof(bits));
+    /* Exact zero subtraction can be -0 under round-toward-negative. */
+    bits &= 0x7fffffffu;
+  }
+  bits |= ((u32)h & 0x8000) << 16;
+  f32 result;
+  memcpy(&result, &bits, sizeof(result));
+  return result;
+}
+
+static inline f32 vec_half_at_finite(const void *data, size_t i) {
+  uint16_t h;
+  memcpy(&h, (const u8 *)data + i * 2, 2);
+  return vec_half_to_float_finite(h);
+}
+
 static void vec_half_expand(const void *data, f32 *out, size_t n) {
   for (size_t i = 0; i < n; i++) out[i] = vec_half_at(data, i);
 }
@@ -134,7 +163,7 @@ static f32 l2_sqr_float16_f16c(const void *a, const f32 *q, size_t n, f32 query_
   f32 sum = 0;
   for (int j = 0; j < 8; j++) sum += s[j];
   for (; i < n; i++) {
-    f32 diff = vec_half_at(a, i) - q[i];
+    f32 diff = vec_half_at_finite(a, i) - q[i];
     sum += diff * diff;
   }
   return sqrtf(sum);
@@ -168,7 +197,7 @@ static f32 l1_float16_f16c(const void *a, const f32 *q, size_t n, f32 query_norm
   f32 sum = 0;
   for (int j = 0; j < 8; j++) sum += s[j];
   for (; i < n; i++) {
-    f32 diff = vec_half_at(a, i) - q[i];
+    f32 diff = vec_half_at_finite(a, i) - q[i];
     sum += fabsf(diff);
   }
   return sum;
@@ -207,7 +236,7 @@ static f32 cosine_float16_f16c(const void *a, const f32 *q, size_t n, f32 query_
   f32 norm = 0;
   for (int j = 0; j < 8; j++) norm += m[j];
   for (; i < n; i++) {
-    f32 x = vec_half_at(a, i);
+    f32 x = vec_half_at_finite(a, i);
     sum += x * q[i];
     norm += x * x;
   }
@@ -222,7 +251,7 @@ static f32 l2_sqr_float16(const void *a, const f32 *q, size_t n, f32 query_norm)
   UNUSED_PARAMETER(query_norm);
   f32 sum = 0;
   for (size_t i = 0; i < n; i++) {
-    f32 diff = vec_half_at(a, i) - q[i];
+    f32 diff = vec_half_at_finite(a, i) - q[i];
     sum += diff * diff;
   }
   return sqrtf(sum);
@@ -233,7 +262,7 @@ static f32 l1_float16(const void *a, const f32 *q, size_t n, f32 query_norm) {
   UNUSED_PARAMETER(query_norm);
   f32 sum = 0;
   for (size_t i = 0; i < n; i++) {
-    f32 diff = vec_half_at(a, i) - q[i];
+    f32 diff = vec_half_at_finite(a, i) - q[i];
     sum += fabsf(diff);
   }
   return sum;
@@ -244,7 +273,7 @@ static f32 cosine_float16(const void *a, const f32 *q, size_t n, f32 query_norm)
   f32 sum = 0;
   f32 norm = 0;
   for (size_t i = 0; i < n; i++) {
-    f32 x = vec_half_at(a, i);
+    f32 x = vec_half_at_finite(a, i);
     sum += x * q[i];
     norm += x * x;
   }
